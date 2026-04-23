@@ -461,6 +461,7 @@ let savedBuildings = null;
 let showLasers = true;
 let mousePos = null;
 let isDragging = false;
+let hoverGroup = null; // for rotate hint in solve mode
 
 // ─── SOLVE MODE ──────────────────────────────────────────────────────────────
 let mode = 'design';
@@ -1054,9 +1055,16 @@ function drawHoverHighlight() {
 }
 
 function drawGroups() {
+  const cornerRotations = {
+    'NW': ['NW', 'NE', 'SE', 'SW'],
+    'NE': ['NE', 'SE', 'SW', 'NW'],
+    'SE': ['SE', 'SW', 'NW', 'NE'],
+    'SW': ['SW', 'NW', 'NE', 'SE']
+  };
   for (let i = 0; i < groups.length; i++) {
     const group = groups[i];
     const isSelected = selectedGroup === i;
+    const isHover = hoverGroup === i;
     for (const piece of group.pieces) {
       let dr = piece.dr, dc = piece.dc;
       // Apply rotation
@@ -1065,6 +1073,11 @@ function drawGroups() {
       }
       const x = group.x + dc * CELL;
       const y = group.y + dr * CELL;
+      // Compute rotated corner for triangles
+      let effectiveCorner = piece.tile.corner;
+      if (piece.tile.type === 'triangle') {
+        effectiveCorner = cornerRotations[piece.tile.corner][group.rotation % 4];
+      }
       // Draw the piece
       if (piece.tile.type === 'square') {
         ctx.fillStyle = 'rgba(74,122,155,0.6)';
@@ -1073,7 +1086,7 @@ function drawGroups() {
         ctx.lineWidth = 1.5;
         ctx.strokeRect(x + 3, y + 3, CELL - 6, CELL - 6);
       } else if (piece.tile.type === 'triangle') {
-        drawTriangleTile(x, y, piece.tile.corner);
+        drawTriangleTile(x, y, effectiveCorner);
       }
       if (isSelected) {
         ctx.strokeStyle = 'rgba(232,201,126,0.9)';
@@ -1087,6 +1100,12 @@ function drawGroups() {
 function getBuildingAt(r, c) {
   if (mode === 'design') return state.buildings[`${r},${c}`];
   // solve mode
+  const cornerRotations = {
+    'NW': ['NW', 'NE', 'SE', 'SW'],
+    'NE': ['NE', 'SE', 'SW', 'NW'],
+    'SE': ['SE', 'SW', 'NW', 'NE'],
+    'SW': ['SW', 'NW', 'NE', 'SE']
+  };
   for (const group of groups) {
     const gridX = BORDER;
     const gridY = BORDER;
@@ -1098,7 +1117,11 @@ function getBuildingAt(r, c) {
         [dr, dc] = [dc, -dr];
       }
       if (gr + dr === r && gc + dc === c) {
-        return piece.tile;
+        const tile = JSON.parse(JSON.stringify(piece.tile));
+        if (tile.type === 'triangle') {
+          tile.corner = cornerRotations[tile.corner][group.rotation % 4];
+        }
+        return tile;
       }
     }
   }
@@ -1292,11 +1315,13 @@ canvas.addEventListener('mousedown', (e) => {
 
   if (mode === 'solve') {
     selectedGroup = null;
+    
+    // Check if clicking a piece to drag
     for (let i = 0; i < groups.length; i++) {
       const group = groups[i];
       for (const piece of group.pieces) {
         let dr = piece.dr, dc = piece.dc;
-        for (let rot = 0; rot < group.rotation % 4; rot++) {
+        for (let r = 0; r < group.rotation % 4; r++) {
           [dr, dc] = [dc, -dr];
         }
         const px = group.x + dc * CELL;
@@ -1380,6 +1405,31 @@ canvas.addEventListener('mousemove', (e) => {
     return;
   }
 
+  // Hover detection for solve mode groups (for rotate hint)
+  if (mode === 'solve') {
+    hoverGroup = null;
+    const gridRight = BORDER + state.cols * CELL;
+    for (let i = 0; i < groups.length; i++) {
+      const group = groups[i];
+      // Only track groups outside/right of grid (the palette area)
+      if (group.x >= gridRight) continue;
+      for (const piece of group.pieces) {
+        let dr = piece.dr, dc = piece.dc;
+        for (let r = 0; r < group.rotation % 4; r++) {
+          [dr, dc] = [dc, -dr];
+        }
+        const px = group.x + dc * CELL;
+        const py = group.y + dr * CELL;
+        if (x >= px && x < px + CELL && y >= py && y < py + CELL) {
+          hoverGroup = i;
+          break;
+        }
+      }
+      if (hoverGroup !== null) break;
+    }
+    drawAll();
+  }
+
   const hit = coordsToCell(x, y);
   const hoverEl = document.getElementById('statusHover');
   if (hit) {
@@ -1432,27 +1482,25 @@ canvas.addEventListener('mouseup', (e) => {
     const gridY = BORDER;
     const gridW = state.cols * CELL;
     const gridH = state.rows * CELL;
-    // Calculate bounding box of group
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const piece of group.pieces) {
-      let dr = piece.dr, dc = piece.dc;
-      for (let rot = 0; rot < group.rotation % 4; rot++) {
-        [dr, dc] = [dc, -dr];
-      }
-      const px = group.x + dc * CELL;
-      const py = group.y + dr * CELL;
-      minX = Math.min(minX, px);
-      minY = Math.min(minY, py);
-      maxX = Math.max(maxX, px + CELL);
-      maxY = Math.max(maxY, py + CELL);
-    }
-    if (minX >= gridX && maxX <= gridX + gridW && minY >= gridY && maxY <= gridY + gridH) {
-      // Snap to grid
-      const snappedR = Math.round((minY - gridY) / CELL);
-      const snappedC = Math.round((minX - gridX) / CELL);
-      group.x = gridX + snappedC * CELL;
-      group.y = gridY + snappedR * CELL;
-      // Check overlap
+    
+    // Check if group center is in or near grid
+    const centerX = group.x + CELL;
+    const centerY = group.y + CELL;
+    const inOrNearGrid = centerX >= gridX && centerX <= gridX + gridW &&
+                         centerY >= gridY && centerY <= gridY + gridH;
+    
+    if (inOrNearGrid) {
+      // Snap the actual group position to nearest cell
+      const snappedR = Math.round((group.y - gridY) / CELL);
+      const snappedC = Math.round((group.x - gridX) / CELL);
+      
+      // Clamp to grid bounds
+      const clampedR = Math.max(0, Math.min(state.rows - 1, snappedR));
+      const clampedC = Math.max(0, Math.min(state.cols - 1, snappedC));
+      group.x = gridX + clampedC * CELL;
+      group.y = gridY + clampedR * CELL;
+      
+      // Check overlap with other groups
       let overlap = false;
       for (let j = 0; j < groups.length; j++) {
         if (j === selectedGroup) continue;
@@ -1462,8 +1510,8 @@ canvas.addEventListener('mouseup', (e) => {
           for (let rot = 0; rot < group.rotation % 4; rot++) {
             [dr, dc] = [dc, -dr];
           }
-          const r = snappedR + dr;
-          const c = snappedC + dc;
+          const r = clampedR + dr;
+          const c = clampedC + dc;
           for (const op of other.pieces) {
             let odr = op.dr, odc = op.dc;
             for (let rot = 0; rot < other.rotation % 4; rot++) {
@@ -1481,7 +1529,7 @@ canvas.addEventListener('mouseup', (e) => {
         if (overlap) break;
       }
       if (overlap) {
-        // Move back to right of grid
+        // Move back to palette area
         group.x = BORDER + state.cols * CELL + 40 + selectedGroup * (CELL * 2 + 20);
         group.y = BORDER;
       }
@@ -1542,6 +1590,7 @@ canvas.addEventListener('contextmenu', (e) => {
 
 canvas.addEventListener('mouseleave', () => {
   mousePos = null;
+  hoverGroup = null;
   if (!moveDrag && !dragRectAnchor) drawAll();
 });
 
@@ -1568,6 +1617,11 @@ window.addEventListener('keydown', (e) => {
     showStatus(`Pasted ${clipboard.cells.length} tile(s)`);
   }
   if (e.key === 'Escape') { selectedCells.clear(); dragRectAnchor=null; dragRectCurrent=null; moveDrag=null; drawAll(); }
+  if (mode === 'solve' && (e.key === ' ' || e.key === 'Spacebar') && hoverGroup !== null) {
+    e.preventDefault();
+    groups[hoverGroup].rotation = (groups[hoverGroup].rotation + 1) % 4;
+    drawAll();
+  }
   if (isMeta && e.key === 'a') { e.preventDefault(); selectAll(); }
 });
 
@@ -1618,6 +1672,7 @@ document.getElementById('btnMode').addEventListener('click', function() {
       const height = Math.max(...group.pieces.map(p => p.dr)) + 1;
       group.x = gridRight + 40;
       group.y = currentY;
+      group.rotation = Math.floor(Math.random() * 4); // Random 0,1,2,3
       currentY += height * CELL + 20;
     }
     this.textContent = 'Switch to Design Mode';
