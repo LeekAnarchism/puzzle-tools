@@ -500,8 +500,9 @@ const canvas = document.getElementById('mainCanvas');
 const ctx = canvas.getContext('2d');
 
 function canvasSize() {
+  const spaceForGroups = BORDER + 3 * CELL; // space on right for groups
   return {
-    w: BORDER * 2 + state.cols * CELL,
+    w: BORDER * 2 + state.cols * CELL + spaceForGroups,
     h: BORDER * 2 + state.rows * CELL
   };
 }
@@ -1479,9 +1480,9 @@ canvas.addEventListener('mouseup', (e) => {
         if (overlap) break;
       }
       if (overlap) {
-        // Move back
-        group.x = BORDER + selectedGroup * (CELL * 3 + 20);
-        group.y = BORDER + state.rows * CELL + BORDER + 20;
+        // Move back to right of grid
+        group.x = BORDER + state.cols * CELL + 40 + selectedGroup * (CELL * 2 + 20);
+        group.y = BORDER;
       }
     }
     selectedGroup = null;
@@ -1606,15 +1607,15 @@ document.getElementById('btnMode').addEventListener('click', function() {
     mode = 'solve';
     groups = computeGroups();
     state.buildings = {};
-    // Position groups below the grid
-    const gridBottom = BORDER + state.rows * CELL + BORDER;
-    let currentX = BORDER;
+    // Position groups to the right of the grid
+    const gridRight = BORDER + state.cols * CELL;
+    let currentY = BORDER;
     for (let i = 0; i < groups.length; i++) {
       const group = groups[i];
-      const width = Math.max(...group.pieces.map(p => p.dc)) + 1;
-      group.x = currentX;
-      group.y = gridBottom + 20;
-      currentX += width * CELL + 20;
+      const height = Math.max(...group.pieces.map(p => p.dr)) + 1;
+      group.x = gridRight + 40;
+      group.y = currentY;
+      currentY += height * CELL + 20;
     }
     this.textContent = 'Switch to Design Mode';
   } else {

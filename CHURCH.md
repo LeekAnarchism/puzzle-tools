@@ -46,7 +46,7 @@ Church is a laser puzzle game where players must position mirrors and blockers t
 
 All lasers from all eyes must reach the church.
 
-## Tools
+## Design Mode Tools
 
 | Tool | Action |
 |------|--------|
@@ -56,6 +56,14 @@ All lasers from all eyes must reach the church.
 | Building | Click to place/remove |
 | Triangle | Click to place (corner selectable) |
 | Erase | Click to remove |
+
+## Solve Mode
+
+- Building groups extracted and placed to the right of the grid
+- Drag groups into the grid to solve
+- Right-click to rotate group
+- Cannot edit grid directly - only move groups
+- Win when all lasers hit church
 
 ## Keyboard Shortcuts
 
