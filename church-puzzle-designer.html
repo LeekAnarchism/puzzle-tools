@@ -283,6 +283,7 @@
 <header>
   <h1>✦ Puzzle <span>Designer</span></h1>
   <div class="header-actions">
+    <button class="btn" id="btnMode">Switch to Solve Mode</button>
     <button class="btn" id="btnShowLasers">Show Lasers</button>
     <button class="btn" id="btnCopy" title="Copy selection (Cmd/Ctrl+C)">Copy</button>
     <button class="btn" id="btnCut" title="Cut selection (Cmd/Ctrl+X)">Cut</button>
@@ -460,6 +461,12 @@ let showLasers = false;
 let mousePos = null;
 let isDragging = false;
 
+// ─── SOLVE MODE ──────────────────────────────────────────────────────────────
+let mode = 'design';
+let groups = [];
+let selectedGroup = null;
+let dragOffset = null;
+
 // ─── SELECTION STATE ──────────────────────────────────────────────────────────
 let selectedCells = new Set(); // Set of "r,c" keys
 let clipboard = null;          // {cells:[{dr,dc,tile}]} relative to top-left of bounding box
@@ -589,7 +596,7 @@ function computeLaser(edge, idx) {
     if (r < 0 || r >= state.rows || c < 0 || c >= state.cols) break;
 
     const key = `${r},${c}`;
-    const tile = state.buildings[key];
+    const tile = getBuildingAt(r, c);
     const cx = BORDER + c * CELL + CELL / 2;
     const cy = BORDER + r * CELL + CELL / 2;
 
@@ -682,6 +689,32 @@ function drawAll() {
   drawSelection();
   drawDragRect();
   drawHoverHighlight();
+  if (mode === 'solve') drawGroups();
+
+  // Check win condition in solve mode
+  if (mode === 'solve') {
+    let allHit = true;
+    for (const key in state.eyes) {
+      const [edge, idxStr] = key.split(':');
+      const idx = parseInt(idxStr);
+      const {hitsChurch} = computeLaser(edge, idx);
+      if (!hitsChurch) {
+        allHit = false;
+        break;
+      }
+    }
+    if (allHit && Object.keys(state.eyes).length > 0) {
+      // Show win message
+      ctx.save();
+      ctx.fillStyle = 'rgba(0,0,0,0.8)';
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#e8c97e';
+      ctx.font = '48px Cinzel';
+      ctx.textAlign = 'center';
+      ctx.fillText('You Win!', w / 2, h / 2);
+      ctx.restore();
+    }
+  }
 
   // Update selection count in status bar
   const selEl = document.getElementById('statusSel');
@@ -927,11 +960,11 @@ function drawLasers() {
   ctx.lineWidth = 1.5;
   ctx.globalAlpha = 0.8;
 
-  for (con{segments} = computeLaser(edge, idx);
-    for (const seg of segment= key.split(':');
+  for (const key in state.eyes) {
+    const [edge, idxStr] = key.split(':');
     const idx = parseInt(idxStr);
-    const segs = computeLaser(edge, idx);
-    for (const seg of segs) {
+    const {segments} = computeLaser(edge, idx);
+    for (const seg of segments) {
       ctx.beginPath();
       ctx.moveTo(seg.x1, seg.y1);
       ctx.lineTo(seg.x2, seg.y2);
@@ -1018,6 +1051,58 @@ function drawHoverHighlight() {
   ctx.setLineDash([]);
 }
 
+function drawGroups() {
+  for (let i = 0; i < groups.length; i++) {
+    const group = groups[i];
+    const isSelected = selectedGroup === i;
+    for (const piece of group.pieces) {
+      let dr = piece.dr, dc = piece.dc;
+      // Apply rotation
+      for (let rot = 0; rot < group.rotation % 4; rot++) {
+        [dr, dc] = [dc, -dr];
+      }
+      const x = group.x + dc * CELL;
+      const y = group.y + dr * CELL;
+      // Draw the piece
+      if (piece.tile.type === 'square') {
+        ctx.fillStyle = 'rgba(74,122,155,0.6)';
+        ctx.fillRect(x + 2, y + 2, CELL - 4, CELL - 4);
+        ctx.strokeStyle = '#4a7a9b';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x + 3, y + 3, CELL - 6, CELL - 6);
+      } else if (piece.tile.type === 'triangle') {
+        drawTriangleTile(x, y, piece.tile.corner);
+      }
+      if (isSelected) {
+        ctx.strokeStyle = 'rgba(232,201,126,0.9)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + 1, y + 1, CELL - 2, CELL - 2);
+      }
+    }
+  }
+}
+
+function getBuildingAt(r, c) {
+  if (mode === 'design') return state.buildings[`${r},${c}`];
+  // solve mode
+  for (const group of groups) {
+    const gridX = BORDER;
+    const gridY = BORDER;
+    const gr = Math.round((group.y - gridY) / CELL);
+    const gc = Math.round((group.x - gridX) / CELL);
+    for (const piece of group.pieces) {
+      let dr = piece.dr, dc = piece.dc;
+      for (let rot = 0; rot < group.rotation % 4; rot++) {
+        [dr, dc] = [dc, -dr];
+      }
+      if (gr + dr === r && gc + dc === c) {
+        return piece.tile;
+      }
+    }
+  }
+  return null;
+}
+
 // ─── INTERACTION ─────────────────────────────────────────────────────────────
 
 // ─── SELECTION HELPERS ────────────────────────────────────────────────────────
@@ -1039,6 +1124,35 @@ function floodSelectGroup(r, c) {
   }
   // Return only keys that are actual building tiles
   return new Set([...visited].filter(k => state.buildings[k]));
+}
+
+function computeGroups() {
+  const visited = new Set();
+  const groups = [];
+  for (const key in state.buildings) {
+    if (visited.has(key)) continue;
+    const [r, c] = key.split(',').map(Number);
+    const groupKeys = floodSelectGroup(r, c);
+    if (groupKeys.size > 0) {
+      // Compute bounding box
+      let minR = Infinity, minC = Infinity, maxR = -Infinity, maxC = -Infinity;
+      for (const k of groupKeys) {
+        const [rr, cc] = k.split(',').map(Number);
+        minR = Math.min(minR, rr);
+        minC = Math.min(minC, cc);
+        maxR = Math.max(maxR, rr);
+        maxC = Math.max(maxC, cc);
+      }
+      const pieces = [];
+      for (const k of groupKeys) {
+        const [rr, cc] = k.split(',').map(Number);
+        pieces.push({dr: rr - minR, dc: cc - minC, tile: state.buildings[k]});
+      }
+      groups.push({pieces, x: 0, y: 0, rotation: 0});
+      groupKeys.forEach(k => visited.add(k));
+    }
+  }
+  return groups;
 }
 
 function selectionBBox() {
@@ -1174,6 +1288,28 @@ canvas.addEventListener('mousedown', (e) => {
   const hit = coordsToCell(x, y);
   isDragging = false;
 
+  if (mode === 'solve') {
+    selectedGroup = null;
+    for (let i = 0; i < groups.length; i++) {
+      const group = groups[i];
+      for (const piece of group.pieces) {
+        let dr = piece.dr, dc = piece.dc;
+        for (let rot = 0; rot < group.rotation % 4; rot++) {
+          [dr, dc] = [dc, -dr];
+        }
+        const px = group.x + dc * CELL;
+        const py = group.y + dr * CELL;
+        if (x >= px && x < px + CELL && y >= py && y < py + CELL) {
+          selectedGroup = i;
+          dragOffset = {dx: group.x - x, dy: group.y - y};
+          drawAll();
+          return;
+        }
+      }
+    }
+    return;
+  }
+
   if (currentTool !== 'select') {
     isDragging = true;
     handleNonSelectClick(x, y);
@@ -1235,6 +1371,13 @@ canvas.addEventListener('mousemove', (e) => {
   const {x, y} = canvasCoords(e);
   mousePos = {x, y};
 
+  if (mode === 'solve' && selectedGroup !== null) {
+    groups[selectedGroup].x = x + dragOffset.dx;
+    groups[selectedGroup].y = y + dragOffset.dy;
+    drawAll();
+    return;
+  }
+
   const hit = coordsToCell(x, y);
   const hoverEl = document.getElementById('statusHover');
   if (hit) {
@@ -1281,6 +1424,72 @@ canvas.addEventListener('mouseup', (e) => {
   const {x, y} = canvasCoords(e);
   const hit = coordsToCell(x, y);
 
+  if (mode === 'solve' && selectedGroup !== null) {
+    const group = groups[selectedGroup];
+    const gridX = BORDER;
+    const gridY = BORDER;
+    const gridW = state.cols * CELL;
+    const gridH = state.rows * CELL;
+    // Calculate bounding box of group
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const piece of group.pieces) {
+      let dr = piece.dr, dc = piece.dc;
+      for (let rot = 0; rot < group.rotation % 4; rot++) {
+        [dr, dc] = [dc, -dr];
+      }
+      const px = group.x + dc * CELL;
+      const py = group.y + dr * CELL;
+      minX = Math.min(minX, px);
+      minY = Math.min(minY, py);
+      maxX = Math.max(maxX, px + CELL);
+      maxY = Math.max(maxY, py + CELL);
+    }
+    if (minX >= gridX && maxX <= gridX + gridW && minY >= gridY && maxY <= gridY + gridH) {
+      // Snap to grid
+      const snappedR = Math.round((minY - gridY) / CELL);
+      const snappedC = Math.round((minX - gridX) / CELL);
+      group.x = gridX + snappedC * CELL;
+      group.y = gridY + snappedR * CELL;
+      // Check overlap
+      let overlap = false;
+      for (let j = 0; j < groups.length; j++) {
+        if (j === selectedGroup) continue;
+        const other = groups[j];
+        for (const p of group.pieces) {
+          let dr = p.dr, dc = p.dc;
+          for (let rot = 0; rot < group.rotation % 4; rot++) {
+            [dr, dc] = [dc, -dr];
+          }
+          const r = snappedR + dr;
+          const c = snappedC + dc;
+          for (const op of other.pieces) {
+            let odr = op.dr, odc = op.dc;
+            for (let rot = 0; rot < other.rotation % 4; rot++) {
+              [odr, odc] = [odc, -odr];
+            }
+            const or = Math.round((other.y - gridY) / CELL) + odr;
+            const oc = Math.round((other.x - gridX) / CELL) + odc;
+            if (r === or && c === oc) {
+              overlap = true;
+              break;
+            }
+          }
+          if (overlap) break;
+        }
+        if (overlap) break;
+      }
+      if (overlap) {
+        // Move back
+        group.x = BORDER + selectedGroup * (CELL * 3 + 20);
+        group.y = BORDER + state.rows * CELL + BORDER + 20;
+      }
+    }
+    selectedGroup = null;
+    dragOffset = null;
+    drawAll();
+    return;
+  }
+
   // Finish move drag
   if (moveDrag) {
     if (hit && hit.type === 'cell') {
@@ -1319,6 +1528,14 @@ canvas.addEventListener('mouseup', (e) => {
   }
 
   isDragging = false;
+});
+
+canvas.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  if (mode === 'solve' && selectedGroup !== null) {
+    groups[selectedGroup].rotation = (groups[selectedGroup].rotation + 1) % 4;
+    drawAll();
+  }
 });
 
 canvas.addEventListener('mouseleave', () => {
@@ -1383,6 +1600,30 @@ document.querySelectorAll('.tri-btn').forEach(btn => {
 });
 
 // ─── HEADER BUTTONS ──────────────────────────────────────────────────────────
+
+document.getElementById('btnMode').addEventListener('click', function() {
+  if (mode === 'design') {
+    mode = 'solve';
+    groups = computeGroups();
+    state.buildings = {};
+    // Position groups below the grid
+    const gridBottom = BORDER + state.rows * CELL + BORDER;
+    let currentX = BORDER;
+    for (let i = 0; i < groups.length; i++) {
+      const group = groups[i];
+      const width = Math.max(...group.pieces.map(p => p.dc)) + 1;
+      group.x = currentX;
+      group.y = gridBottom + 20;
+      currentX += width * CELL + 20;
+    }
+    this.textContent = 'Switch to Design Mode';
+  } else {
+    mode = 'design';
+    // For now, keep as is
+    this.textContent = 'Switch to Solve Mode';
+  }
+  drawAll();
+});
 
 document.getElementById('btnShowLasers').addEventListener('click', function() {
   showLasers = !showLasers;
