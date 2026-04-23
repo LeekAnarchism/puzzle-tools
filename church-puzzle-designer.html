@@ -457,6 +457,7 @@ let state = {
 
 let currentTool = 'select';
 let triCorner = 'NW';
+let savedBuildings = null;
 let showLasers = false;
 let mousePos = null;
 let isDragging = false;
@@ -1604,6 +1605,8 @@ document.querySelectorAll('.tri-btn').forEach(btn => {
 
 document.getElementById('btnMode').addEventListener('click', function() {
   if (mode === 'design') {
+    // Save buildings before entering solve mode
+    savedBuildings = JSON.parse(JSON.stringify(state.buildings));
     mode = 'solve';
     groups = computeGroups();
     state.buildings = {};
@@ -1620,7 +1623,8 @@ document.getElementById('btnMode').addEventListener('click', function() {
     this.textContent = 'Switch to Design Mode';
   } else {
     mode = 'design';
-    // For now, keep as is
+    // Restore original buildings
+    state.buildings = JSON.parse(JSON.stringify(savedBuildings));
     this.textContent = 'Switch to Solve Mode';
   }
   drawAll();
