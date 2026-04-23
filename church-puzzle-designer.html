@@ -1432,8 +1432,8 @@ canvas.addEventListener('mousemove', (e) => {
     const gridRight = BORDER + state.cols * CELL;
     for (let i = 0; i < groups.length; i++) {
       const group = groups[i];
-      // Only track groups outside/right of grid (the palette area)
-      if (group.x >= gridRight) continue;
+      // Only track groups in the palette area (right of grid)
+      if (group.x < gridRight) continue;
       for (const piece of group.pieces) {
         let dr = piece.dr, dc = piece.dc;
         for (let r = 0; r < group.rotation % 4; r++) {
