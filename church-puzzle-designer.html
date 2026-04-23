@@ -1,0 +1,1515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Puzzle Designer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
+
+  :root {
+    --bg: #1a1410;
+    --parchment: #2a2018;
+    --parchment2: #231c14;
+    --ink: #c8a96e;
+    --ink-dim: #7a6440;
+    --ink-bright: #e8c97e;
+    --accent: #d4864a;
+    --accent2: #8b3a2a;
+    --laser: #4af0b8;
+    --laser-glow: rgba(74,240,184,0.3);
+    --church: #e8c97e;
+    --eye: #d4864a;
+    --building: #4a7a9b;
+    --building-tri: #9b4a7a;
+    --grid-line: rgba(200,169,110,0.25);
+    --sel: rgba(212,134,74,0.35);
+    --panel: #1e1810;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Crimson Text', Georgia, serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Parchment texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 999;
+    opacity: 0.5;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--ink-dim);
+    background: var(--parchment);
+    flex-shrink: 0;
+  }
+
+  header h1 {
+    font-family: 'Cinzel', serif;
+    font-size: 1.3rem;
+    color: var(--ink-bright);
+    letter-spacing: 0.15em;
+    text-shadow: 0 0 20px rgba(232,201,126,0.3);
+  }
+
+  header h1 span { color: var(--accent); }
+
+  .header-actions { display: flex; gap: 8px; }
+
+  .btn {
+    font-family: 'Cinzel', serif;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    padding: 5px 12px;
+    border: 1px solid var(--ink-dim);
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+  .btn:hover { border-color: var(--ink); color: var(--ink-bright); background: rgba(200,169,110,0.08); }
+  .btn.active { border-color: var(--accent); color: var(--accent); background: rgba(212,134,74,0.1); }
+  .btn.danger { border-color: var(--accent2); color: #e08070; }
+  .btn.danger:hover { background: rgba(139,58,42,0.2); }
+
+  .workspace {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* LEFT PANEL */
+  .panel {
+    width: 220px;
+    background: var(--panel);
+    border-right: 1px solid var(--ink-dim);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+
+  .panel-section {
+    padding: 14px;
+    border-bottom: 1px solid rgba(200,169,110,0.15);
+  }
+
+  .panel-section h3 {
+    font-family: 'Cinzel', serif;
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .tool-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+  }
+
+  .tool-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 4px;
+    border: 1px solid var(--ink-dim);
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'Crimson Text', serif;
+    font-size: 0.7rem;
+  }
+  .tool-btn svg { width: 20px; height: 20px; }
+  .tool-btn:hover { border-color: var(--ink); background: rgba(200,169,110,0.06); }
+  .tool-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(212,134,74,0.12); }
+
+  .input-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .input-row label {
+    font-size: 0.78rem;
+    color: var(--ink-dim);
+    flex: 1;
+  }
+  .input-row input[type=number] {
+    width: 50px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--ink-dim);
+    color: var(--ink);
+    padding: 3px 6px;
+    font-family: 'Crimson Text', serif;
+    font-size: 0.85rem;
+    text-align: center;
+  }
+  .input-row input[type=number]:focus { outline: none; border-color: var(--ink); }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 5px;
+    font-size: 0.75rem;
+    color: var(--ink-dim);
+  }
+  .legend-swatch {
+    width: 14px; height: 14px;
+    border: 1px solid currentColor;
+    flex-shrink: 0;
+  }
+
+  .tri-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+    margin-top: 5px;
+  }
+  .tri-btn {
+    border: 1px solid var(--ink-dim);
+    background: transparent;
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  .tri-btn:hover { border-color: var(--ink); }
+  .tri-btn.active { border-color: var(--building-tri); }
+  .tri-btn svg { width: 28px; height: 28px; }
+
+  /* MAIN CANVAS AREA */
+  .canvas-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: auto;
+    position: relative;
+  }
+
+  .grid-wrapper {
+    position: relative;
+    user-select: none;
+  }
+
+  canvas {
+    display: block;
+    cursor: crosshair;
+  }
+
+  /* STATUS BAR */
+  .statusbar {
+    height: 26px;
+    background: var(--parchment);
+    border-top: 1px solid var(--ink-dim);
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    gap: 20px;
+    font-size: 0.72rem;
+    color: var(--ink-dim);
+    flex-shrink: 0;
+  }
+  .statusbar span { font-size: 0.72rem; }
+  .statusbar .highlight { color: var(--ink); }
+
+  /* Modal */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--parchment);
+    border: 1px solid var(--ink-dim);
+    padding: 24px;
+    max-width: 500px;
+    width: 90%;
+    font-size: 0.85rem;
+  }
+  .modal h2 {
+    font-family: 'Cinzel', serif;
+    font-size: 1rem;
+    color: var(--ink-bright);
+    margin-bottom: 16px;
+    letter-spacing: 0.1em;
+  }
+  .modal textarea {
+    width: 100%;
+    height: 200px;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--ink-dim);
+    color: var(--ink);
+    padding: 8px;
+    font-family: monospace;
+    font-size: 0.75rem;
+    resize: none;
+  }
+  .modal-actions { display: flex; gap: 8px; margin-top: 12px; justify-content: flex-end; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>✦ Puzzle <span>Designer</span></h1>
+  <div class="header-actions">
+    <button class="btn" id="btnShowLasers">Show Lasers</button>
+    <button class="btn" id="btnCopy" title="Copy selection (Cmd/Ctrl+C)">Copy</button>
+    <button class="btn" id="btnCut" title="Cut selection (Cmd/Ctrl+X)">Cut</button>
+    <button class="btn" id="btnPaste" title="Paste (Cmd/Ctrl+V)">Paste</button>
+    <button class="btn" id="btnExport">Export</button>
+    <button class="btn" id="btnImport">Import</button>
+    <button class="btn danger" id="btnClear">Clear All</button>
+  </div>
+</header>
+
+<div class="workspace">
+  <div class="panel">
+
+    <div class="panel-section">
+      <h3>Grid Size</h3>
+      <div class="input-row">
+        <label>Columns</label>
+        <input type="number" id="inputCols" min="2" max="20" value="5">
+      </div>
+      <div class="input-row">
+        <label>Rows</label>
+        <input type="number" id="inputRows" min="2" max="20" value="5">
+      </div>
+      <button class="btn" id="btnResize" style="width:100%;margin-top:4px;">Apply Size</button>
+    </div>
+
+    <div class="panel-section">
+      <h3>Tool</h3>
+      <div class="tool-grid">
+        <button class="tool-btn active" id="tool-select" data-tool="select">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M5 3l14 9-7 1-4 7z"/>
+          </svg>
+          Select
+        </button>
+        <button class="tool-btn" id="tool-church" data-tool="church">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="7" y="10" width="10" height="11"/><path d="M12 2v8M9 5h6"/>
+            <path d="M7 21H17"/>
+          </svg>
+          Church
+        </button>
+        <button class="tool-btn" id="tool-eye" data-tool="eye">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <ellipse cx="12" cy="12" rx="8" ry="5"/><circle cx="12" cy="12" r="2" fill="currentColor"/>
+          </svg>
+          Eye
+        </button>
+        <button class="tool-btn" id="tool-building" data-tool="building">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="4" y="8" width="16" height="13"/><path d="M4 8l8-5 8 5"/>
+          </svg>
+          Building
+        </button>
+        <button class="tool-btn" id="tool-triangle" data-tool="triangle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <polygon points="3,21 21,3 21,21"/>
+          </svg>
+          Triangle
+        </button>
+        <button class="tool-btn" id="tool-erase" data-tool="erase">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M20 20H7L3 16l10-10 7 7-3 3"/><path d="M6.5 17.5l4-4"/>
+          </svg>
+          Erase
+        </button>
+      </div>
+    </div>
+
+    <div class="panel-section" id="triSection" style="display:none;">
+      <h3>Triangle Corner</h3>
+      <div class="tri-options">
+        <button class="tri-btn active" data-corner="NW" title="NW corner cut">
+          <svg viewBox="0 0 32 32" fill="none" stroke="#9b4a7a" stroke-width="1.5">
+            <polygon points="0,0 32,0 32,32 0,32" fill="rgba(155,74,122,0.15)" stroke="none"/>
+            <polygon points="0,0 16,0 0,16" fill="#9b4a7a" opacity="0.5" stroke="none"/>
+            <line x1="16" y1="0" x2="0" y2="16" stroke="#9b4a7a" stroke-width="2"/>
+          </svg>
+        </button>
+        <button class="tri-btn" data-corner="NE" title="NE corner cut">
+          <svg viewBox="0 0 32 32" fill="none" stroke="#9b4a7a" stroke-width="1.5">
+            <polygon points="0,0 32,0 32,32 0,32" fill="rgba(155,74,122,0.15)" stroke="none"/>
+            <polygon points="16,0 32,0 32,16" fill="#9b4a7a" opacity="0.5" stroke="none"/>
+            <line x1="16" y1="0" x2="32" y2="16" stroke="#9b4a7a" stroke-width="2"/>
+          </svg>
+        </button>
+        <button class="tri-btn" data-corner="SW" title="SW corner cut">
+          <svg viewBox="0 0 32 32" fill="none" stroke="#9b4a7a" stroke-width="1.5">
+            <polygon points="0,0 32,0 32,32 0,32" fill="rgba(155,74,122,0.15)" stroke="none"/>
+            <polygon points="0,16 0,32 16,32" fill="#9b4a7a" opacity="0.5" stroke="none"/>
+            <line x1="0" y1="16" x2="16" y2="32" stroke="#9b4a7a" stroke-width="2"/>
+          </svg>
+        </button>
+        <button class="tri-btn" data-corner="SE" title="SE corner cut">
+          <svg viewBox="0 0 32 32" fill="none" stroke="#9b4a7a" stroke-width="1.5">
+            <polygon points="0,0 32,0 32,32 0,32" fill="rgba(155,74,122,0.15)" stroke="none"/>
+            <polygon points="32,16 32,32 16,32" fill="#9b4a7a" opacity="0.5" stroke="none"/>
+            <line x1="32" y1="16" x2="16" y2="32" stroke="#9b4a7a" stroke-width="2"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>Legend</h3>
+      <div class="legend-item" style="color:#e8c97e"><div class="legend-swatch" style="background:rgba(232,201,126,0.3);border-color:#e8c97e"></div> Church</div>
+      <div class="legend-item" style="color:#d4864a"><div class="legend-swatch" style="background:rgba(212,134,74,0.3);border-color:#d4864a"></div> Eye</div>
+      <div class="legend-item" style="color:#4a7a9b"><div class="legend-swatch" style="background:rgba(74,122,155,0.3);border-color:#4a7a9b"></div> Building</div>
+      <div class="legend-item" style="color:#9b4a7a"><div class="legend-swatch" style="background:rgba(155,74,122,0.3);border-color:#9b4a7a"></div> Triangle tile</div>
+      <div class="legend-item" style="color:#4af0b8"><div class="legend-swatch" style="background:rgba(74,240,184,0.2);border-color:#4af0b8"></div> Laser</div>
+    </div>
+
+    <div class="panel-section">
+      <h3>Info</h3>
+      <p style="font-size:0.73rem;color:var(--ink-dim);line-height:1.7;">
+        Eyes on grid edges shoot lasers inward. Lasers bounce off triangle diagonals at 90°. Church is the target.<br><br>
+        <b style="color:var(--ink-dim)">Select tool:</b><br>
+        Drag → rect select<br>
+        ⌘/Ctrl+click → select group<br>
+        ⌘/Ctrl+A → select all<br>
+        Drag selection → move<br>
+        Del/Backspace → delete<br>
+        ⌘/Ctrl+C/X/V → copy/cut/paste<br>
+        Esc → deselect
+      </p>
+    </div>
+
+  </div>
+
+  <div class="canvas-area" id="canvasArea">
+    <div class="grid-wrapper" id="gridWrapper">
+      <canvas id="mainCanvas"></canvas>
+    </div>
+  </div>
+</div>
+
+<div class="statusbar">
+  <span>Tool: <span class="highlight" id="statusTool">Select</span></span>
+  <span>Grid: <span class="highlight" id="statusGrid">5 × 5</span></span>
+  <span>Hover: <span class="highlight" id="statusHover">—</span></span>
+  <span>Sel: <span class="highlight" id="statusSel">—</span></span>
+  <span id="statusMsg" style="margin-left:auto;color:var(--accent);"></span>
+</div>
+
+<!-- Export/Import Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h2 id="modalTitle">Export State</h2>
+    <textarea id="modalText" spellcheck="false"></textarea>
+    <div class="modal-actions">
+      <button class="btn" id="modalCopy">Copy</button>
+      <button class="btn" id="modalAction">Import</button>
+      <button class="btn" id="modalClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── STATE ──────────────────────────────────────────────────────────────────
+
+const CELL = 64; // cell size in px
+const BORDER = CELL; // border for eyes
+
+let state = {
+  cols: 5,
+  rows: 5,
+  church: { r: 2, c: 2 },
+  eyes: {},    // key: "edge:idx" -> true (edge = 'top','bottom','left','right', idx = 0..n-1)
+  buildings: {},  // key: "r,c" -> { type: 'square' | 'triangle', corner?: 'NW'|'NE'|'SW'|'SE' }
+};
+
+let currentTool = 'select';
+let triCorner = 'NW';
+let showLasers = false;
+let mousePos = null;
+let isDragging = false;
+
+// ─── SELECTION STATE ──────────────────────────────────────────────────────────
+let selectedCells = new Set(); // Set of "r,c" keys
+let clipboard = null;          // {cells:[{dr,dc,tile}]} relative to top-left of bounding box
+
+// Rubber-band rect selection
+let dragRectAnchor = null;     // canvas {x,y} where mousedown started
+let dragRectCurrent = null;    // canvas {x,y} current mouse pos during rubber-band
+
+// Move-drag state (dragging an existing selection)
+let moveDrag = null;           // {anchorR,anchorC,snapshot:{buildings,church}} when move started
+
+// ─── PERSISTENCE ─────────────────────────────────────────────────────────────
+
+function saveState() {
+  try { localStorage.setItem('puzzleDesigner_v1', JSON.stringify(state)); } catch(e) {}
+}
+
+function loadState() {
+  try {
+    const s = localStorage.getItem('puzzleDesigner_v1');
+    if (s) {
+      const parsed = JSON.parse(s);
+      Object.assign(state, parsed);
+    }
+  } catch(e) {}
+}
+
+// ─── CANVAS SETUP ────────────────────────────────────────────────────────────
+
+const canvas = document.getElementById('mainCanvas');
+const ctx = canvas.getContext('2d');
+
+function canvasSize() {
+  return {
+    w: BORDER * 2 + state.cols * CELL,
+    h: BORDER * 2 + state.rows * CELL
+  };
+}
+
+function resizeCanvas() {
+  const { w, h } = canvasSize();
+  canvas.width = w;
+  canvas.height = h;
+}
+
+// Convert canvas coords to grid cell (r,c) or edge position
+function coordsToCell(x, y) {
+  // Inside grid?
+  const gx = x - BORDER;
+  const gy = y - BORDER;
+  const W = state.cols * CELL;
+  const H = state.rows * CELL;
+
+  if (gx >= 0 && gx < W && gy >= 0 && gy < H) {
+    return { type: 'cell', r: Math.floor(gy / CELL), c: Math.floor(gx / CELL) };
+  }
+
+  // Check edge zones
+  if (gy >= 0 && gy < H) {
+    const idx = Math.floor(gy / CELL);
+    if (x < BORDER && x >= 0) return { type: 'edge', edge: 'left', idx };
+    if (x >= BORDER + W && x < BORDER * 2 + W) return { type: 'edge', edge: 'right', idx };
+  }
+  if (gx >= 0 && gx < W) {
+    const idx = Math.floor(gx / CELL);
+    if (y < BORDER && y >= 0) return { type: 'edge', edge: 'top', idx };
+    if (y >= BORDER + H && y < BORDER * 2 + H) return { type: 'edge', edge: 'bottom', idx };
+  }
+
+  return null;
+}
+
+function cellToCanvas(r, c) {
+  return { x: BORDER + c * CELL, y: BORDER + r * CELL };
+}
+
+function edgeToCanvas(edge, idx) {
+  const half = CELL / 2;
+  const W = state.cols * CELL;
+  const H = state.rows * CELL;
+  switch(edge) {
+    case 'top':    return { x: BORDER + idx * CELL + half, y: BORDER / 2 };
+    case 'bottom': return { x: BORDER + idx * CELL + half, y: BORDER + H + BORDER / 2 };
+    case 'left':   return { x: BORDER / 2, y: BORDER + idx * CELL + half };
+    case 'right':  return { x: BORDER + W + BORDER / 2, y: BORDER + idx * CELL + half };
+  }
+}
+
+// ─── LASER SIMULATION ────────────────────────────────────────────────────────
+
+// Direction: {dr, dc}
+function laserDirFromEdge(edge) {
+  switch(edge) {
+    case 'top':    return { dr: 1,  dc: 0  };
+    case 'bottom': return { dr: -1, dc: 0  };
+    case 'left':   return { dr: 0,  dc: 1  };
+    case 'right':  return { dr: 0,  dc: -1 };
+  }
+}
+
+function laserStartCell(edge, idx) {
+  switch(edge) {
+    case 'top':    return { r: 0,                 c: idx };
+    case 'bottom': return { r: state.rows - 1,    c: idx };
+    case 'left':   return { r: idx,               c: 0 };
+    case 'right':  return { r: idx,               c: state.cols - 1 };
+  }
+}
+
+// Compute laser path. Returns array of {x1,y1,x2,y2} segments.
+function computeLaser(edge, idx) {
+  const segments = [];
+  let { dr, dc } = laserDirFromEdge(edge);
+  let { r, c } = laserStartCell(edge, idx);
+
+  // Start point: eye center
+  const eyePos = edgeToCanvas(edge, idx);
+
+  // First point on grid entry
+  // The laser enters the grid at the center of the starting cell's edge
+  let prevX = eyePos.x;
+  let prevY = eyePos.y;
+
+  const maxSteps = (state.rows + state.cols) * 4;
+  for (let step = 0; step < maxSteps; step++) {
+    if (r < 0 || r >= state.rows || c < 0 || c >= state.cols) break;
+
+    const key = `${r},${c}`;
+    const tile = state.buildings[key];
+    const cx = BORDER + c * CELL + CELL / 2;
+    const cy = BORDER + r * CELL + CELL / 2;
+
+    if (tile && tile.type === 'square') {
+      // Laser hits a solid building — draw up to the entry face and stop
+      // Entry face center: come from direction (dr,dc), so face is offset by -0.5 cell
+      const faceX = cx - dc * CELL * 0.5;
+      const faceY = cy - dr * CELL * 0.5;
+      segments.push({ x1: prevX, y1: prevY, x2: faceX, y2: faceY });
+      return segments; // absorbed
+    } else if (tile && tile.type === 'triangle') {
+      const bounce = getTriangleBounce(tile.corner, dr, dc);
+      if (bounce) {
+        // Bounce at the diagonal — draw to cell centre then change direction
+        segments.push({ x1: prevX, y1: prevY, x2: cx, y2: cy });
+        prevX = cx; prevY = cy;
+        dr = bounce.dr; dc = bounce.dc;
+      } else {
+        // Passes through the empty half
+        segments.push({ x1: prevX, y1: prevY, x2: cx, y2: cy });
+        prevX = cx; prevY = cy;
+      }
+    } else {
+      // Empty cell — pass through
+      segments.push({ x1: prevX, y1: prevY, x2: cx, y2: cy });
+      prevX = cx; prevY = cy;
+    }
+
+    r += dr; c += dc;
+  }
+
+  // Draw exit segment to edge of grid or beyond
+  const exitX = prevX + dc * CELL * 0.7;
+  const exitY = prevY + dr * CELL * 0.7;
+  if (segments.length > 0 || true) {
+    segments.push({ x1: prevX, y1: prevY, x2: exitX, y2: exitY });
+  }
+
+  return segments;
+}
+
+// Returns new {dr,dc} if bounce happens, or null if laser passes through the empty half.
+// Corner = name of the SOLID triangle corner.
+// Mirror axes:
+//   NW solid (/  diagonal top-right→bottom-left): reflection = {dr:-dc, dc:-dr}
+//     Solid half is top-left. Laser hits diagonal if coming from right (dc<0) or from bottom (dr<0).
+//   NE solid (\ diagonal top-left→bottom-right): reflection = {dr:dc, dc:dr}
+//     Solid half is top-right. Laser hits diagonal if coming from left (dc>0) or from bottom (dr<0).
+//   SW solid (\ diagonal top-left→bottom-right): reflection = {dr:dc, dc:dr}
+//     Solid half is bottom-left. Laser hits diagonal if coming from right (dc<0) or from top (dr>0).
+//   SE solid (/ diagonal top-right→bottom-left): reflection = {dr:-dc, dc:-dr}
+//     Solid half is bottom-right. Laser hits diagonal if coming from left (dc>0) or from top (dr>0).
+function getTriangleBounce(corner, dr, dc) {
+  switch(corner) {
+    case 'NW': // / mirror, solid top-left
+      if (dc < 0 || dr < 0) return { dr: -dc, dc: -dr };
+      return null;
+    case 'NE': // \ mirror, solid top-right
+      if (dc > 0 || dr < 0) return { dr: dc, dc: dr };
+      return null;
+    case 'SW': // \ mirror, solid bottom-left
+      if (dc < 0 || dr > 0) return { dr: dc, dc: dr };
+      return null;
+    case 'SE': // / mirror, solid bottom-right
+      if (dc > 0 || dr > 0) return { dr: -dc, dc: -dr };
+      return null;
+  }
+  return null;
+}
+
+// ─── DRAWING ─────────────────────────────────────────────────────────────────
+
+let _animating = false;
+function drawAll() {
+  const { w, h } = canvasSize();
+  ctx.clearRect(0, 0, w, h);
+
+  drawBackground();
+  drawGrid();
+  drawEyeZones();
+  drawBuildings();
+  drawChurch();
+  drawEyes();
+  if (showLasers) drawLasers();
+  drawSelection();
+  drawDragRect();
+  drawHoverHighlight();
+
+  // Update selection count in status bar
+  const selEl = document.getElementById('statusSel');
+  if (selEl) selEl.textContent = selectedCells.size > 0 ? `${selectedCells.size} tile(s)` : '—';
+
+  // Keep marching ants animating while there's a selection
+  if (selectedCells.size > 0 && !_animating) {
+    _animating = true;
+    function animLoop() {
+      if (selectedCells.size === 0) { _animating = false; return; }
+      drawAll();
+      requestAnimationFrame(animLoop);
+    }
+    requestAnimationFrame(animLoop);
+  }
+}
+
+function drawBackground() {
+  const { w, h } = canvasSize();
+  ctx.fillStyle = '#1a1410';
+  ctx.fillRect(0, 0, w, h);
+
+  // Grid area background
+  ctx.fillStyle = '#1e1a12';
+  ctx.fillRect(BORDER, BORDER, state.cols * CELL, state.rows * CELL);
+}
+
+function drawGrid() {
+  ctx.strokeStyle = 'rgba(200,169,110,0.2)';
+  ctx.lineWidth = 1;
+
+  for (let r = 0; r <= state.rows; r++) {
+    const y = BORDER + r * CELL;
+    ctx.beginPath();
+    ctx.moveTo(BORDER, y);
+    ctx.lineTo(BORDER + state.cols * CELL, y);
+    ctx.stroke();
+  }
+  for (let c = 0; c <= state.cols; c++) {
+    const x = BORDER + c * CELL;
+    ctx.beginPath();
+    ctx.moveTo(x, BORDER);
+    ctx.lineTo(x, BORDER + state.rows * CELL);
+    ctx.stroke();
+  }
+
+  // Outer border
+  ctx.strokeStyle = 'rgba(200,169,110,0.5)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(BORDER, BORDER, state.cols * CELL, state.rows * CELL);
+}
+
+function drawEyeZones() {
+  // Subtle markers on edges to show where eyes can go
+  ctx.strokeStyle = 'rgba(212,134,74,0.12)';
+  ctx.lineWidth = 1;
+
+  for (let i = 0; i < state.rows; i++) {
+    // Left zone
+    ctx.strokeRect(2, BORDER + i * CELL + 2, CELL - 4, CELL - 4);
+    // Right zone
+    ctx.strokeRect(BORDER + state.cols * CELL + 2, BORDER + i * CELL + 2, CELL - 4, CELL - 4);
+  }
+  for (let i = 0; i < state.cols; i++) {
+    // Top zone
+    ctx.strokeRect(BORDER + i * CELL + 2, 2, CELL - 4, CELL - 4);
+    // Bottom zone
+    ctx.strokeRect(BORDER + i * CELL + 2, BORDER + state.rows * CELL + 2, CELL - 4, CELL - 4);
+  }
+}
+
+function drawEyeSymbol(x, y, edge) {
+  // Draw an eye shape, oriented to look inward
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Rotate based on edge direction
+  const angles = { top: 0, bottom: Math.PI, left: -Math.PI/2, right: Math.PI/2 };
+  ctx.rotate(angles[edge] || 0);
+
+  const s = 18;
+  ctx.strokeStyle = '#d4864a';
+  ctx.fillStyle = 'rgba(212,134,74,0.2)';
+  ctx.lineWidth = 1.5;
+
+  // Eye outline (pointing down = looking inward when rotated)
+  ctx.beginPath();
+  ctx.ellipse(0, 0, s * 0.6, s * 0.35, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Pupil
+  ctx.fillStyle = '#d4864a';
+  ctx.beginPath();
+  ctx.arc(0, 0, s * 0.15, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Arrow showing direction
+  ctx.strokeStyle = 'rgba(212,134,74,0.5)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, -s * 0.5);
+  ctx.lineTo(0, s * 0.5);
+  ctx.moveTo(-4, s * 0.2);
+  ctx.lineTo(0, s * 0.5);
+  ctx.lineTo(4, s * 0.2);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawEyes() {
+  for (const key in state.eyes) {
+    const [edge, idx] = key.split(':');
+    const pos = edgeToCanvas(edge, parseInt(idx));
+    drawEyeSymbol(pos.x, pos.y, edge);
+  }
+}
+
+function drawChurch() {
+  const { r, c } = state.church;
+  const { x, y } = cellToCanvas(r, c);
+  const cx = x + CELL / 2;
+  const cy = y + CELL / 2;
+  const s = CELL * 0.35;
+
+  ctx.fillStyle = 'rgba(232,201,126,0.15)';
+  ctx.fillRect(x + 2, y + 2, CELL - 4, CELL - 4);
+  ctx.strokeStyle = '#e8c97e';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(x + 3, y + 3, CELL - 6, CELL - 6);
+
+  // Church icon
+  ctx.strokeStyle = '#e8c97e';
+  ctx.fillStyle = 'rgba(232,201,126,0.5)';
+  ctx.lineWidth = 1.5;
+
+  // Body
+  ctx.beginPath();
+  ctx.rect(cx - s * 0.5, cy - s * 0.2, s, s * 0.8);
+  ctx.fill();
+  ctx.stroke();
+
+  // Cross/steeple
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - s * 1.1);
+  ctx.lineTo(cx, cy - s * 0.2);
+  ctx.moveTo(cx - s * 0.3, cy - s * 0.65);
+  ctx.lineTo(cx + s * 0.3, cy - s * 0.65);
+  ctx.stroke();
+
+  // Glow
+  ctx.shadowColor = '#e8c97e';
+  ctx.shadowBlur = 15;
+  ctx.beginPath();
+  ctx.arc(cx, cy - s * 1.1, 3, 0, Math.PI * 2);
+  ctx.fillStyle = '#e8c97e';
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+function drawBuildings() {
+  for (const key in state.buildings) {
+    const [r, c] = key.split(',').map(Number);
+    const tile = state.buildings[key];
+    const { x, y } = cellToCanvas(r, c);
+
+    if (tile.type === 'square') {
+      ctx.fillStyle = 'rgba(74,122,155,0.3)';
+      ctx.fillRect(x + 2, y + 2, CELL - 4, CELL - 4);
+      ctx.strokeStyle = '#4a7a9b';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(x + 3, y + 3, CELL - 6, CELL - 6);
+
+      // Building detail
+      ctx.strokeStyle = 'rgba(74,122,155,0.5)';
+      ctx.lineWidth = 1;
+      const bx = x + CELL * 0.25, by = y + CELL * 0.35;
+      const bw = CELL * 0.5, bh = CELL * 0.4;
+      ctx.strokeRect(bx, by, bw, bh);
+      // Roof
+      ctx.beginPath();
+      ctx.moveTo(bx - 4, by);
+      ctx.lineTo(x + CELL/2, y + CELL * 0.18);
+      ctx.lineTo(bx + bw + 4, by);
+      ctx.stroke();
+
+    } else if (tile.type === 'triangle') {
+      drawTriangleTile(x, y, tile.corner);
+    }
+  }
+}
+
+function drawTriangleTile(x, y, corner) {
+  // Corner names refer to the SOLID corner of the triangle half that fills the cell.
+  // The diagonal runs fully from one cell corner to the opposite pair.
+  // NW: solid triangle occupies top-left half; diagonal from (x,y+CELL) to (x+CELL,y)  — a / mirror
+  // NE: solid triangle occupies top-right half; diagonal from (x,y) to (x+CELL,y+CELL) — a \ mirror
+  // SW: solid triangle occupies bottom-left half; diagonal from (x,y) to (x+CELL,y+CELL) — a \ mirror
+  // SE: solid triangle occupies bottom-right half; diagonal from (x,y+CELL) to (x+CELL,y) — a / mirror
+
+  const x0 = x, y0 = y;
+  const x1 = x + CELL, y1 = y + CELL;
+
+  // Solid triangle (the filled half)
+  ctx.fillStyle = 'rgba(155,74,122,0.45)';
+  ctx.beginPath();
+  switch(corner) {
+    case 'NW': ctx.moveTo(x0,y0); ctx.lineTo(x1,y0); ctx.lineTo(x0,y1); break; // top-left triangle
+    case 'NE': ctx.moveTo(x0,y0); ctx.lineTo(x1,y0); ctx.lineTo(x1,y1); break; // top-right triangle
+    case 'SW': ctx.moveTo(x0,y0); ctx.lineTo(x0,y1); ctx.lineTo(x1,y1); break; // bottom-left triangle
+    case 'SE': ctx.moveTo(x1,y0); ctx.lineTo(x1,y1); ctx.lineTo(x0,y1); break; // bottom-right triangle
+  }
+  ctx.closePath();
+  ctx.fill();
+
+  // Outer cell border (dim)
+  ctx.strokeStyle = 'rgba(155,74,122,0.4)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x0, y0, CELL, CELL);
+
+  // Diagonal mirror line (bright, full corner-to-corner)
+  ctx.strokeStyle = '#c46aa0';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  switch(corner) {
+    case 'NW': ctx.moveTo(x1, y0); ctx.lineTo(x0, y1); break; // / diagonal
+    case 'NE': ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); break; // \ diagonal
+    case 'SW': ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); break; // \ diagonal
+    case 'SE': ctx.moveTo(x1, y0); ctx.lineTo(x0, y1); break; // / diagonal
+  }
+  ctx.stroke();
+}
+
+function drawLasers() {
+  ctx.save();
+  ctx.strokeStyle = '#4af0b8';
+  ctx.shadowColor = '#4af0b8';
+  ctx.shadowBlur = 8;
+  ctx.lineWidth = 1.5;
+  ctx.globalAlpha = 0.8;
+
+  for (const key in state.eyes) {
+    const [edge, idxStr] = key.split(':');
+    const idx = parseInt(idxStr);
+    const segs = computeLaser(edge, idx);
+    for (const seg of segs) {
+      ctx.beginPath();
+      ctx.moveTo(seg.x1, seg.y1);
+      ctx.lineTo(seg.x2, seg.y2);
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawSelection() {
+  if (selectedCells.size === 0) return;
+
+  ctx.save();
+  // Fill selected cells with a tint
+  ctx.fillStyle = 'rgba(212,134,74,0.18)';
+  for (const key of selectedCells) {
+    const [r, c] = key.split(',').map(Number);
+    const { x, y } = cellToCanvas(r, c);
+    ctx.fillRect(x, y, CELL, CELL);
+  }
+
+  // Marching-ants outline: draw border segments only where cell edge is on selection boundary
+  ctx.strokeStyle = 'rgba(232,201,126,0.9)';
+  ctx.lineWidth = 2;
+  const t = (Date.now() / 120) % 12;
+  ctx.setLineDash([6, 6]);
+  ctx.lineDashOffset = -t;
+
+  for (const key of selectedCells) {
+    const [r, c] = key.split(',').map(Number);
+    const { x, y } = cellToCanvas(r, c);
+    // top edge
+    if (!selectedCells.has(`${r-1},${c}`)) { ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+CELL,y); ctx.stroke(); }
+    // bottom edge
+    if (!selectedCells.has(`${r+1},${c}`)) { ctx.beginPath(); ctx.moveTo(x,y+CELL); ctx.lineTo(x+CELL,y+CELL); ctx.stroke(); }
+    // left edge
+    if (!selectedCells.has(`${r},${c-1}`)) { ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x,y+CELL); ctx.stroke(); }
+    // right edge
+    if (!selectedCells.has(`${r},${c+1}`)) { ctx.beginPath(); ctx.moveTo(x+CELL,y); ctx.lineTo(x+CELL,y+CELL); ctx.stroke(); }
+  }
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawDragRect() {
+  if (!dragRectAnchor || !dragRectCurrent) return;
+  const r0 = Math.min(dragRectAnchor.r, dragRectCurrent.r);
+  const c0 = Math.min(dragRectAnchor.c, dragRectCurrent.c);
+  const r1 = Math.max(dragRectAnchor.r, dragRectCurrent.r);
+  const c1 = Math.max(dragRectAnchor.c, dragRectCurrent.c);
+  const { x, y } = cellToCanvas(r0, c0);
+  const w = (c1 - c0 + 1) * CELL;
+  const h = (r1 - r0 + 1) * CELL;
+  ctx.save();
+  ctx.fillStyle = 'rgba(212,134,74,0.1)';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = 'rgba(212,134,74,0.7)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 4]);
+  ctx.strokeRect(x, y, w, h);
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawHoverHighlight() {
+  if (!mousePos) return;
+  if (moveDrag || dragRectAnchor) return; // suppress hover during drags
+  const hit = coordsToCell(mousePos.x, mousePos.y);
+  if (!hit) return;
+
+  ctx.strokeStyle = 'rgba(212,134,74,0.45)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 4]);
+
+  if (hit.type === 'cell') {
+    const { x, y } = cellToCanvas(hit.r, hit.c);
+    ctx.strokeRect(x + 1, y + 1, CELL - 2, CELL - 2);
+  } else if (hit.type === 'edge' && (currentTool === 'eye' || currentTool === 'erase' || currentTool === 'select')) {
+    const pos = edgeToCanvas(hit.edge, hit.idx);
+    ctx.strokeRect(pos.x - CELL/2 + 2, pos.y - CELL/2 + 2, CELL - 4, CELL - 4);
+  }
+
+  ctx.setLineDash([]);
+}
+
+// ─── INTERACTION ─────────────────────────────────────────────────────────────
+
+// ─── SELECTION HELPERS ────────────────────────────────────────────────────────
+
+function floodSelectGroup(r, c) {
+  // BFS flood-fill selecting all adjacent building/triangle tiles (4-connected)
+  const visited = new Set();
+  const queue = [`${r},${c}`];
+  while (queue.length) {
+    const key = queue.shift();
+    if (visited.has(key)) continue;
+    visited.add(key);
+    if (!state.buildings[key]) continue; // only spread through building tiles
+    const [cr, cc] = key.split(',').map(Number);
+    for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+      const nk = `${cr+dr},${cc+dc}`;
+      if (!visited.has(nk) && state.buildings[nk]) queue.push(nk);
+    }
+  }
+  // Return only keys that are actual building tiles
+  return new Set([...visited].filter(k => state.buildings[k]));
+}
+
+function selectionBBox() {
+  let minR=Infinity,minC=Infinity,maxR=-Infinity,maxC=-Infinity;
+  for (const key of selectedCells) {
+    const [r,c] = key.split(',').map(Number);
+    minR=Math.min(minR,r); minC=Math.min(minC,c);
+    maxR=Math.max(maxR,r); maxC=Math.max(maxC,c);
+  }
+  return {minR,minC,maxR,maxC};
+}
+
+function deleteSelection() {
+  for (const key of selectedCells) {
+    delete state.buildings[key];
+  }
+  selectedCells.clear();
+  saveState();
+  drawAll();
+}
+
+function copySelection(cut=false) {
+  if (selectedCells.size === 0) return;
+  const {minR,minC} = selectionBBox();
+  clipboard = { cells: [] };
+  for (const key of selectedCells) {
+    const [r,c] = key.split(',').map(Number);
+    clipboard.cells.push({ dr: r-minR, dc: c-minC, tile: JSON.parse(JSON.stringify(state.buildings[key])) });
+  }
+  if (cut) {
+    deleteSelection();
+  } else {
+    showStatus(`Copied ${clipboard.cells.length} tile(s)`);
+    drawAll();
+  }
+}
+
+function pasteClipboard(atR, atC) {
+  if (!clipboard) return;
+  selectedCells.clear();
+  for (const { dr, dc, tile } of clipboard.cells) {
+    const r = atR + dr, c = atC + dc;
+    if (r < 0 || r >= state.rows || c < 0 || c >= state.cols) continue;
+    const key = `${r},${c}`;
+    state.buildings[key] = JSON.parse(JSON.stringify(tile));
+    selectedCells.add(key);
+  }
+  saveState();
+  drawAll();
+}
+
+// Move selection by (dr,dc) — removes originals and places at new positions
+function commitMove(newAnchorR, newAnchorC) {
+  if (!moveDrag) return;
+  const {anchorR, anchorC, cells} = moveDrag;
+  const ddr = newAnchorR - anchorR;
+  const ddc = newAnchorC - anchorC;
+  if (ddr === 0 && ddc === 0) { moveDrag = null; drawAll(); return; }
+
+  // Remove originals
+  for (const {key} of cells) delete state.buildings[key];
+  // Handle church move too if it was in selection
+  const churchKey = `${state.church.r},${state.church.c}`;
+  const churchSelected = selectedCells.has(churchKey);
+
+  // Place at new positions
+  selectedCells.clear();
+  for (const {dr, dc, tile} of cells) {
+    const nr = anchorR + dr + ddr;
+    const nc = anchorC + dc + ddc;
+    if (nr < 0 || nr >= state.rows || nc < 0 || nc >= state.cols) continue;
+    const nk = `${nr},${nc}`;
+    state.buildings[nk] = tile;
+    selectedCells.add(nk);
+  }
+  if (churchSelected) {
+    state.church.r = state.church.r + ddr;
+    state.church.c = state.church.c + ddc;
+    state.church.r = Math.max(0, Math.min(state.rows-1, state.church.r));
+    state.church.c = Math.max(0, Math.min(state.cols-1, state.church.c));
+  }
+  moveDrag = null;
+  saveState();
+  drawAll();
+}
+
+// ─── INTERACTION ─────────────────────────────────────────────────────────────
+
+function canvasCoords(e) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (e.clientX - rect.left) * (canvas.width / rect.width),
+    y: (e.clientY - rect.top)  * (canvas.height / rect.height)
+  };
+}
+
+function handleNonSelectClick(x, y) {
+  const hit = coordsToCell(x, y);
+  if (!hit) return;
+
+  if (hit.type === 'cell') {
+    const { r, c } = hit;
+    const key = `${r},${c}`;
+    if (currentTool === 'church') {
+      state.church = { r, c };
+      delete state.buildings[key];
+    } else if (currentTool === 'building') {
+      if (r === state.church.r && c === state.church.c) return;
+      state.buildings[key] = { type: 'square' };
+    } else if (currentTool === 'triangle') {
+      if (r === state.church.r && c === state.church.c) return;
+      state.buildings[key] = { type: 'triangle', corner: triCorner };
+    } else if (currentTool === 'erase') {
+      delete state.buildings[key];
+    }
+  } else if (hit.type === 'edge') {
+    const key = `${hit.edge}:${hit.idx}`;
+    if (currentTool === 'eye') {
+      if (state.eyes[key]) delete state.eyes[key];
+      else state.eyes[key] = true;
+    } else if (currentTool === 'erase') {
+      delete state.eyes[key];
+    }
+  }
+
+  saveState();
+  drawAll();
+}
+
+canvas.addEventListener('mousedown', (e) => {
+  e.preventDefault();
+  const {x, y} = canvasCoords(e);
+  const hit = coordsToCell(x, y);
+  isDragging = false;
+
+  if (currentTool !== 'select') {
+    isDragging = true;
+    handleNonSelectClick(x, y);
+    return;
+  }
+
+  // ── SELECT TOOL ──
+  const isMeta = e.metaKey || e.ctrlKey;
+
+  if (hit && hit.type === 'cell') {
+    const key = `${hit.r},${hit.c}`;
+
+    // Cmd/Ctrl+click → flood-select group
+    if (isMeta && state.buildings[key]) {
+      const group = floodSelectGroup(hit.r, hit.c);
+      // Toggle: if all already selected, deselect; otherwise add
+      const allSelected = [...group].every(k => selectedCells.has(k));
+      if (allSelected) { for (const k of group) selectedCells.delete(k); }
+      else { for (const k of group) selectedCells.add(k); }
+      drawAll();
+      return;
+    }
+
+    // Click on a selected cell → start move drag
+    if (selectedCells.has(key) && !isMeta) {
+      // Capture snapshot of which cells + their tiles
+      const cells = [];
+      const bbox = selectionBBox();
+      for (const sk of selectedCells) {
+        const [r,c] = sk.split(',').map(Number);
+        cells.push({ dr: r - bbox.minR, dc: c - bbox.minC, key: sk, tile: JSON.parse(JSON.stringify(state.buildings[sk])) });
+      }
+      moveDrag = { anchorR: hit.r, anchorC: hit.c, cells, bbox };
+      canvas.style.cursor = 'grabbing';
+      return;
+    }
+
+    // Plain click on empty or non-selected cell → start rubber-band
+    if (!isMeta) selectedCells.clear();
+    dragRectAnchor = { r: hit.r, c: hit.c };
+    dragRectCurrent = { r: hit.r, c: hit.c };
+    isDragging = true;
+    drawAll();
+
+  } else if (hit && hit.type === 'edge') {
+    // Eye toggle in select mode
+    const key = `${hit.edge}:${hit.idx}`;
+    if (state.eyes[key]) delete state.eyes[key];
+    else state.eyes[key] = true;
+    saveState();
+    drawAll();
+  } else {
+    // Click outside grid → clear selection
+    if (!isMeta) { selectedCells.clear(); drawAll(); }
+  }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  const {x, y} = canvasCoords(e);
+  mousePos = {x, y};
+
+  const hit = coordsToCell(x, y);
+  const hoverEl = document.getElementById('statusHover');
+  if (hit) {
+    if (hit.type === 'cell') hoverEl.textContent = `Cell (${hit.r}, ${hit.c})`;
+    else hoverEl.textContent = `${hit.edge} edge [${hit.idx}]`;
+  } else {
+    hoverEl.textContent = '—';
+  }
+
+  // Move drag
+  if (moveDrag && hit && hit.type === 'cell') {
+    // Preview move: temporarily apply offset to selection highlight
+    const ddr = hit.r - moveDrag.anchorR;
+    const ddc = hit.c - moveDrag.anchorC;
+    selectedCells.clear();
+    for (const {dr, dc} of moveDrag.cells) {
+      const nr = moveDrag.bbox.minR + dr + ddr;
+      const nc = moveDrag.bbox.minC + dc + ddc;
+      if (nr >= 0 && nr < state.rows && nc >= 0 && nc < state.cols) {
+        selectedCells.add(`${nr},${nc}`);
+      }
+    }
+    drawAll();
+    return;
+  }
+
+  // Rubber-band rect
+  if (dragRectAnchor && hit && hit.type === 'cell') {
+    dragRectCurrent = { r: hit.r, c: hit.c };
+    drawAll();
+    return;
+  }
+
+  // Paint drag for non-select tools
+  if (isDragging && currentTool !== 'select' && (currentTool === 'building' || currentTool === 'triangle' || currentTool === 'erase')) {
+    handleNonSelectClick(x, y);
+    return;
+  }
+
+  drawAll();
+});
+
+canvas.addEventListener('mouseup', (e) => {
+  const {x, y} = canvasCoords(e);
+  const hit = coordsToCell(x, y);
+
+  // Finish move drag
+  if (moveDrag) {
+    if (hit && hit.type === 'cell') {
+      commitMove(hit.r, hit.c);
+    } else {
+      // Drop outside — cancel, restore selection
+      selectedCells.clear();
+      for (const {key} of moveDrag.cells) selectedCells.add(key);
+      moveDrag = null;
+      drawAll();
+    }
+    canvas.style.cursor = 'crosshair';
+    return;
+  }
+
+  // Finish rubber-band selection
+  if (dragRectAnchor && dragRectCurrent) {
+    const r0 = Math.min(dragRectAnchor.r, dragRectCurrent.r);
+    const c0 = Math.min(dragRectAnchor.c, dragRectCurrent.c);
+    const r1 = Math.max(dragRectAnchor.r, dragRectCurrent.r);
+    const c1 = Math.max(dragRectAnchor.c, dragRectCurrent.c);
+    // Only select cells that actually have something (building or church)
+    for (let r = r0; r <= r1; r++) {
+      for (let c = c0; c <= c1; c++) {
+        const key = `${r},${c}`;
+        if (state.buildings[key] || (state.church.r === r && state.church.c === c)) {
+          selectedCells.add(key);
+        }
+      }
+    }
+    dragRectAnchor = null;
+    dragRectCurrent = null;
+    isDragging = false;
+    drawAll();
+    return;
+  }
+
+  isDragging = false;
+});
+
+canvas.addEventListener('mouseleave', () => {
+  mousePos = null;
+  if (!moveDrag && !dragRectAnchor) drawAll();
+});
+
+// ─── KEYBOARD ─────────────────────────────────────────────────────────────────
+
+window.addEventListener('keydown', (e) => {
+  // Don't intercept when typing in inputs
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+  const isMeta = e.metaKey || e.ctrlKey;
+
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (selectedCells.size > 0) { e.preventDefault(); deleteSelection(); }
+  }
+  if (isMeta && e.key === 'c') { e.preventDefault(); copySelection(false); showStatus(`Copied ${selectedCells.size} tile(s)`); }
+  if (isMeta && e.key === 'x') { e.preventDefault(); copySelection(true); showStatus('Cut selection'); }
+  if (isMeta && e.key === 'v') {
+    e.preventDefault();
+    if (!clipboard) return;
+    // Paste at centre of grid, or offset slightly from current if re-pasting
+    const tr = Math.floor(state.rows / 2);
+    const tc = Math.floor(state.cols / 2);
+    pasteClipboard(tr, tc);
+    showStatus(`Pasted ${clipboard.cells.length} tile(s)`);
+  }
+  if (e.key === 'Escape') { selectedCells.clear(); dragRectAnchor=null; dragRectCurrent=null; moveDrag=null; drawAll(); }
+  if (isMeta && e.key === 'a') { e.preventDefault(); selectAll(); }
+});
+
+function selectAll() {
+  selectedCells.clear();
+  for (const key in state.buildings) selectedCells.add(key);
+  const ck = `${state.church.r},${state.church.c}`;
+  selectedCells.add(ck);
+  drawAll();
+}
+
+// ─── TOOL BUTTONS ─────────────────────────────────────────────────────────────
+
+document.querySelectorAll('.tool-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentTool = btn.dataset.tool;
+    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('statusTool').textContent = btn.textContent.trim();
+    document.getElementById('triSection').style.display = currentTool === 'triangle' ? 'block' : 'none';
+    if (currentTool !== 'select') { selectedCells.clear(); }
+    drawAll();
+  });
+});
+
+document.querySelectorAll('.tri-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    triCorner = btn.dataset.corner;
+    document.querySelectorAll('.tri-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+// ─── HEADER BUTTONS ──────────────────────────────────────────────────────────
+
+document.getElementById('btnShowLasers').addEventListener('click', function() {
+  showLasers = !showLasers;
+  this.classList.toggle('active', showLasers);
+  this.textContent = showLasers ? 'Hide Lasers' : 'Show Lasers';
+  drawAll();
+});
+
+document.getElementById('btnCopy').addEventListener('click', () => {
+  if (selectedCells.size === 0) { showStatus('Nothing selected'); return; }
+  copySelection(false); showStatus(`Copied ${selectedCells.size} tile(s)`);
+});
+document.getElementById('btnCut').addEventListener('click', () => {
+  if (selectedCells.size === 0) { showStatus('Nothing selected'); return; }
+  const n = selectedCells.size; copySelection(true); showStatus(`Cut ${n} tile(s)`);
+});
+document.getElementById('btnPaste').addEventListener('click', () => {
+  if (!clipboard) { showStatus('Nothing to paste'); return; }
+  const tr = Math.floor(state.rows / 2);
+  const tc = Math.floor(state.cols / 2);
+  pasteClipboard(tr, tc);
+  showStatus(`Pasted ${clipboard.cells.length} tile(s)`);
+});
+
+document.getElementById('btnResize').addEventListener('click', () => {
+  const newCols = parseInt(document.getElementById('inputCols').value);
+  const newRows = parseInt(document.getElementById('inputRows').value);
+  if (newCols < 2 || newRows < 2 || newCols > 20 || newRows > 20) return;
+
+  state.cols = newCols;
+  state.rows = newRows;
+
+  // Clamp church
+  state.church.r = Math.min(state.church.r, state.rows - 1);
+  state.church.c = Math.min(state.church.c, state.cols - 1);
+
+  // Remove out-of-bounds buildings
+  for (const key in state.buildings) {
+    const [r, c] = key.split(',').map(Number);
+    if (r >= state.rows || c >= state.cols) delete state.buildings[key];
+  }
+
+  // Remove out-of-bounds eyes
+  for (const key in state.eyes) {
+    const [edge, idxStr] = key.split(':');
+    const idx = parseInt(idxStr);
+    if ((edge === 'top' || edge === 'bottom') && idx >= state.cols) delete state.eyes[key];
+    if ((edge === 'left' || edge === 'right') && idx >= state.rows) delete state.eyes[key];
+  }
+
+  document.getElementById('statusGrid').textContent = `${state.cols} × ${state.rows}`;
+  saveState();
+  resizeCanvas();
+  drawAll();
+});
+
+document.getElementById('btnClear').addEventListener('click', () => {
+  if (!confirm('Clear all puzzle data?')) return;
+  state.eyes = {};
+  state.buildings = {};
+  state.church = { r: Math.floor(state.rows/2), c: Math.floor(state.cols/2) };
+  saveState();
+  drawAll();
+});
+
+// Export
+document.getElementById('btnExport').addEventListener('click', () => {
+  const modal = document.getElementById('modalOverlay');
+  document.getElementById('modalTitle').textContent = 'Export State';
+  document.getElementById('modalText').value = JSON.stringify(state, null, 2);
+  document.getElementById('modalAction').textContent = 'Close';
+  document.getElementById('modalCopy').style.display = 'block';
+  modal.classList.add('open');
+  document.getElementById('modalAction').onclick = () => modal.classList.remove('open');
+});
+
+document.getElementById('modalCopy').addEventListener('click', () => {
+  const ta = document.getElementById('modalText');
+  ta.select();
+  document.execCommand('copy');
+  showStatus('Copied to clipboard!');
+});
+
+// Import
+document.getElementById('btnImport').addEventListener('click', () => {
+  const modal = document.getElementById('modalOverlay');
+  document.getElementById('modalTitle').textContent = 'Import State';
+  document.getElementById('modalText').value = '';
+  document.getElementById('modalAction').textContent = 'Import';
+  document.getElementById('modalCopy').style.display = 'none';
+  modal.classList.add('open');
+  document.getElementById('modalAction').onclick = () => {
+    try {
+      const parsed = JSON.parse(document.getElementById('modalText').value);
+      Object.assign(state, parsed);
+      document.getElementById('inputCols').value = state.cols;
+      document.getElementById('inputRows').value = state.rows;
+      document.getElementById('statusGrid').textContent = `${state.cols} × ${state.rows}`;
+      saveState();
+      resizeCanvas();
+      drawAll();
+      modal.classList.remove('open');
+      showStatus('Imported successfully!');
+    } catch(e) {
+      alert('Invalid JSON: ' + e.message);
+    }
+  };
+});
+
+document.getElementById('modalClose').addEventListener('click', () => {
+  document.getElementById('modalOverlay').classList.remove('open');
+});
+
+document.getElementById('modalOverlay').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('modalOverlay')) {
+    document.getElementById('modalOverlay').classList.remove('open');
+  }
+});
+
+function showStatus(msg) {
+  const el = document.getElementById('statusMsg');
+  el.textContent = msg;
+  setTimeout(() => { el.textContent = ''; }, 2500);
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+
+loadState();
+
+// Sync UI inputs with loaded state
+document.getElementById('inputCols').value = state.cols;
+document.getElementById('inputRows').value = state.rows;
+document.getElementById('statusGrid').textContent = `${state.cols} × ${state.rows}`;
+
+resizeCanvas();
+drawAll();
+</script>
+</body>
+</html>
