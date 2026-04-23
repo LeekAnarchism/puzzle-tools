@@ -714,6 +714,9 @@ function drawAll() {
 
   // Check win condition in solve mode
   if (mode === 'solve') {
+    const gridRight = BORDER + state.cols * CELL;
+    const allPlaced = groups.every(g => g.x < gridRight);
+    
     let allHit = true;
     for (const key in state.eyes) {
       const [edge, idxStr] = key.split(':');
@@ -724,7 +727,7 @@ function drawAll() {
         break;
       }
     }
-    if (allHit && Object.keys(state.eyes).length > 0) {
+    if (allPlaced && allHit && Object.keys(state.eyes).length > 0) {
       // Show subtle win banner at top
       ctx.save();
       ctx.fillStyle = 'rgba(30, 24, 16, 0.9)';
