@@ -504,10 +504,25 @@ const canvas = document.getElementById('mainCanvas');
 const ctx = canvas.getContext('2d');
 
 function canvasSize() {
-  const spaceForGroups = BORDER + 3 * CELL; // space on right for groups
+  const slotsPerRow = 4;
+  const slotWidth = CELL * 2 + 10;
+  const slotsWidth = slotsPerRow * slotWidth;
   return {
-    w: BORDER * 2 + state.cols * CELL + spaceForGroups,
-    h: BORDER * 2 + state.rows * CELL
+    w: BORDER * 2 + state.cols * CELL + slotsWidth + BORDER * 2,
+    h: BORDER * 2 + state.rows * CELL + slotsWidth + BORDER * 2
+  };
+}
+
+// Compute slot positions for palette
+function getSlotPosition(index) {
+  const slotsPerRow = 4;
+  const slotWidth = CELL * 2 + 10;
+  const gridRight = BORDER + state.cols * CELL + BORDER * 2;
+  const row = Math.floor(index / slotsPerRow);
+  const col = index % slotsPerRow;
+  return {
+    x: gridRight + col * slotWidth,
+    y: BORDER + row * slotWidth
   };
 }
 
@@ -1531,10 +1546,20 @@ canvas.addEventListener('mouseup', (e) => {
         if (overlap) break;
       }
       if (overlap) {
-        // Move back to palette area
-        group.x = BORDER + state.cols * CELL + 40 + selectedGroup * (CELL * 2 + 20);
-        group.y = BORDER;
+        // Return to slot
+        const slot = getSlotPosition(selectedGroup);
+        group.x = slot.x;
+        group.y = slot.y;
+        group.inSlot = true;
+      } else {
+        group.inSlot = false;
       }
+    } else {
+      // Not in grid - return to slot
+      const slot = getSlotPosition(selectedGroup);
+      group.x = slot.x;
+      group.y = slot.y;
+      group.inSlot = true;
     }
     selectedGroup = null;
     dragOffset = null;
@@ -1666,30 +1691,27 @@ document.getElementById('btnMode').addEventListener('click', function() {
     mode = 'solve';
     groups = computeGroups();
     state.buildings = {};
-    // Position groups to the right of the grid
-    const gridRight = BORDER + state.cols * CELL;
-    let currentY = BORDER;
+    // Position groups to their slots
     for (let i = 0; i < groups.length; i++) {
       const group = groups[i];
-      const height = Math.max(...group.pieces.map(p => p.dr)) + 1;
-      group.x = gridRight + 40;
-      group.y = currentY;
+      const slot = getSlotPosition(i);
+      group.x = slot.x;
+      group.y = slot.y;
       group.rotation = Math.floor(Math.random() * 4);
-      currentY += height * CELL + 20;
+      group.inSlot = true;
     }
     this.textContent = 'Switch to Design Mode';
   } else if (playMode && this.textContent === 'Try Again') {
-    // Scramble groups again for another attempt
+    // Scramble groups again to their slots
     state.buildings = {};
     groups = computeGroups();
-    const gridRight = BORDER + state.cols * CELL;
-    let currentY = BORDER;
     for (let i = 0; i < groups.length; i++) {
       const group = groups[i];
-      const height = Math.max(...group.pieces.map(p => p.dr)) + 1;
-      group.x = gridRight + 40;
-      group.y = currentY;
+      const slot = getSlotPosition(i);
+      group.x = slot.x;
+      group.y = slot.y;
       group.rotation = Math.floor(Math.random() * 4);
+      group.inSlot = true;
       currentY += height * CELL + 20;
     }
     this.textContent = 'Show Solution';
