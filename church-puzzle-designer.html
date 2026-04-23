@@ -1821,7 +1821,7 @@ document.getElementById('modalCopy').addEventListener('click', () => {
 
 // Share
 document.getElementById('btnShare').addEventListener('click', () => {
-  const encoded = btoa(encodeURIComponent(JSON.stringify(state)));
+  const encoded = encodePuzzle(state);
   const url = `${location.origin}${location.pathname}?puzzle=${encoded}`;
   navigator.clipboard.writeText(url).then(() => {
     showStatus('URL copied to clipboard!');
@@ -1925,6 +1925,102 @@ function showStatus(msg) {
   setTimeout(() => { el.textContent = ''; }, 2500);
 }
 
+// Compact encoding: custom binary format for minimal size
+// Format: [cols, rows, churchPos, eyesTop, eyesBottom, eyesLeft, eyesRight, numBuildings, ...buildings]
+// - cols, rows: 1 byte each (0-20)
+// - churchPos: 1 byte (r * 20 + c)
+// - eyes*: 4 bytes each (little-endian uint32 bitmasks)
+// - numBuildings: 1 byte
+// - each building: [pos, typeCorner] where pos=r*cMax+c, typeCorner=type*4+corner (or just type for squares)
+function encodePuzzle(s) {
+  const bytes = [];
+  bytes.push(s.cols, s.rows);
+  bytes.push(s.church.r * 20 + s.church.c);
+  
+  // Eyes as bitmasks for each edge
+  let etop = 0, ebottom = 0, eleft = 0, eright = 0;
+  for (const key in s.eyes) {
+    const [edge, idxStr] = key.split(':');
+    const idx = parseInt(idxStr);
+    if (edge === 'top') etop |= 1 << idx;
+    else if (edge === 'bottom') ebottom |= 1 << idx;
+    else if (edge === 'left') eleft |= 1 << idx;
+    else if (edge === 'right') eright |= 1 << idx;
+  }
+  bytes.push(etop & 0xFF, (etop >> 8) & 0xFF, (etop >> 16) & 0xFF, (etop >> 24) & 0xFF);
+  bytes.push(ebottom & 0xFF, (ebottom >> 8) & 0xFF, (ebottom >> 16) & 0xFF, (ebottom >> 24) & 0xFF);
+  bytes.push(eleft & 0xFF, (eleft >> 8) & 0xFF, (eleft >> 16) & 0xFF, (eleft >> 24) & 0xFF);
+  bytes.push(eright & 0xFF, (eright >> 8) & 0xFF, (eright >> 16) & 0xFF, (eright >> 24) & 0xFF);
+  
+  // Buildings
+  const bldgs = [];
+  for (const key in s.buildings) {
+    const [r, c] = key.split(',').map(Number);
+    const b = s.buildings[key];
+    let tc = b.type === 'square' ? 0 : 1; // 0=square, 1=triangle
+    if (b.type === 'triangle' && b.corner) {
+      const corners = {'NW':0,'NE':1,'SW':2,'SE':3};
+      tc = 4 + (corners[b.corner] ?? 0);
+    }
+    bldgs.push(r * 20 + c, tc);
+  }
+  bytes.push(bldgs.length / 2);
+  bytes.push(...bldgs);
+  
+  // Convert to base64
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+function decodePuzzle(encoded) {
+  const binary = atob(encoded);
+  const bytes = [];
+  for (let i = 0; i < binary.length; i++) {
+    bytes.push(binary.charCodeAt(i));
+  }
+  
+  let idx = 0;
+  const cols = bytes[idx++];
+  const rows = bytes[idx++];
+  const cp = bytes[idx++];
+  const church = { r: Math.floor(cp / 20), c: cp % 20 };
+  
+  const etop = bytes[idx] | (bytes[idx+1] << 8) | (bytes[idx+2] << 16) | (bytes[idx+3] << 24); idx += 4;
+  const ebottom = bytes[idx] | (bytes[idx+1] << 8) | (bytes[idx+2] << 16) | (bytes[idx+3] << 24); idx += 4;
+  const eleft = bytes[idx] | (bytes[idx+1] << 8) | (bytes[idx+2] << 16) | (bytes[idx+3] << 24); idx += 4;
+  const eright = bytes[idx] | (bytes[idx+1] << 8) | (bytes[idx+2] << 16) | (bytes[idx+3] << 24); idx += 4;
+  
+  const eyes = {};
+  for (let i = 0; i < 32; i++) {
+    if (etop & (1 << i)) eyes[`top:${i}`] = true;
+    if (ebottom & (1 << i)) eyes[`bottom:${i}`] = true;
+    if (eleft & (1 << i)) eyes[`left:${i}`] = true;
+    if (eright & (1 << i)) eyes[`right:${i}`] = true;
+  }
+  
+  const numBldgs = bytes[idx++];
+  const buildings = {};
+  for (let i = 0; i < numBldgs; i++) {
+    const pos = bytes[idx++];
+    const tc = bytes[idx++];
+    const r = Math.floor(pos / 20);
+    const c = pos % 20;
+    const key = `${r},${c}`;
+    if (tc === 0) {
+      buildings[key] = { type: 'square' };
+    } else {
+      const cornerIdx = tc - 4;
+      const corners = ['NW','NE','SW','SE'];
+      buildings[key] = { type: 'triangle', corner: corners[cornerIdx] };
+    }
+  }
+  
+  return { cols, rows, church, eyes, buildings };
+}
+
 // ─── INIT ────────────────────────────────────────────────────────────────────
 
 // Load from URL query parameter
@@ -1932,7 +2028,7 @@ const params = new URLSearchParams(location.search);
 const puzzleParam = params.get('puzzle');
 if (puzzleParam) {
   try {
-    const loaded = JSON.parse(decodeURIComponent(atob(puzzleParam)));
+    const loaded = decodePuzzle(puzzleParam);
     Object.assign(state, loaded);
     
     // Enter play mode
