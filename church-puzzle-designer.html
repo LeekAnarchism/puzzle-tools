@@ -283,6 +283,7 @@
 <header>
   <h1>✦ Puzzle <span>Designer</span></h1>
   <div class="header-actions">
+    <button class="btn" id="btnPlay">Play Puzzle</button>
     <button class="btn" id="btnMode">Switch to Solve Mode</button>
     <button class="btn active" id="btnShowLasers">Hide Lasers</button>
     <button class="btn" id="btnCopy" title="Copy selection (Cmd/Ctrl+C)">Copy</button>
@@ -465,6 +466,7 @@ let hoverGroup = null; // for rotate hint in solve mode
 
 // ─── SOLVE MODE ──────────────────────────────────────────────────────────────
 let mode = 'design';
+let playMode = false; // true when playing a shared puzzle
 let groups = [];
 let selectedGroup = null;
 let dragOffset = null;
@@ -1672,15 +1674,39 @@ document.getElementById('btnMode').addEventListener('click', function() {
       const height = Math.max(...group.pieces.map(p => p.dr)) + 1;
       group.x = gridRight + 40;
       group.y = currentY;
-      group.rotation = Math.floor(Math.random() * 4); // Random 0,1,2,3
+      group.rotation = Math.floor(Math.random() * 4);
       currentY += height * CELL + 20;
     }
     this.textContent = 'Switch to Design Mode';
+  } else if (playMode && this.textContent === 'Try Again') {
+    // Scramble groups again for another attempt
+    state.buildings = {};
+    groups = computeGroups();
+    const gridRight = BORDER + state.cols * CELL;
+    let currentY = BORDER;
+    for (let i = 0; i < groups.length; i++) {
+      const group = groups[i];
+      const height = Math.max(...group.pieces.map(p => p.dr)) + 1;
+      group.x = gridRight + 40;
+      group.y = currentY;
+      group.rotation = Math.floor(Math.random() * 4);
+      currentY += height * CELL + 20;
+    }
+    this.textContent = 'Show Solution';
+    drawAll();
+    showStatus('Try again!');
+  } else if (playMode) {
+    // Show solution in play mode - restore original buildings
+    state.buildings = JSON.parse(JSON.stringify(savedBuildings));
+    this.textContent = 'Try Again';
+    drawAll();
+    showStatus('Solution revealed!');
   } else {
     mode = 'design';
     // Restore original buildings
     state.buildings = JSON.parse(JSON.stringify(savedBuildings));
     this.textContent = 'Switch to Solve Mode';
+    playMode = false;
   }
   drawAll();
 });
@@ -1787,6 +1813,53 @@ document.getElementById('btnImport').addEventListener('click', () => {
       drawAll();
       modal.classList.remove('open');
       showStatus('Imported successfully!');
+    } catch(e) {
+      alert('Invalid JSON: ' + e.message);
+    }
+  };
+});
+
+// Play Puzzle
+document.getElementById('btnPlay').addEventListener('click', () => {
+  const modal = document.getElementById('modalOverlay');
+  document.getElementById('modalTitle').textContent = 'Play Puzzle';
+  document.getElementById('modalText').value = '';
+  document.getElementById('modalAction').textContent = 'Play';
+  document.getElementById('modalCopy').style.display = 'none';
+  modal.classList.add('open');
+  document.getElementById('modalAction').onclick = () => {
+    try {
+      const parsed = JSON.parse(document.getElementById('modalText').value);
+      // Load puzzle state
+      Object.assign(state, parsed);
+      document.getElementById('inputCols').value = state.cols;
+      document.getElementById('inputRows').value = state.rows;
+      document.getElementById('statusGrid').textContent = `${state.cols} × ${state.rows}`;
+      resizeCanvas();
+      
+      // Enter play mode (solve mode with saved design)
+      playMode = true;
+      savedBuildings = JSON.parse(JSON.stringify(state.buildings));
+      mode = 'solve';
+      groups = computeGroups();
+      state.buildings = {};
+      
+      // Position groups to the right of the grid
+      const gridRight = BORDER + state.cols * CELL;
+      let currentY = BORDER;
+      for (let i = 0; i < groups.length; i++) {
+        const group = groups[i];
+        const height = Math.max(...group.pieces.map(p => p.dr)) + 1;
+        group.x = gridRight + 40;
+        group.y = currentY;
+        group.rotation = Math.floor(Math.random() * 4);
+        currentY += height * CELL + 20;
+      }
+      
+      document.getElementById('btnMode').textContent = 'Show Solution';
+      modal.classList.remove('open');
+      drawAll();
+      showStatus('Ready to solve!');
     } catch(e) {
       alert('Invalid JSON: ' + e.message);
     }
