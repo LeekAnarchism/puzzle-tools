@@ -2051,6 +2051,9 @@ if (puzzleParam) {
     
     document.getElementById('btnMode').textContent = 'Show Solution';
     showStatus('Loaded from URL! Ready to solve!');
+    
+    // Clear query param from URL
+    history.replaceState({}, '', location.pathname);
   } catch(e) {
     console.error('Failed to load puzzle from URL:', e);
     loadState();
