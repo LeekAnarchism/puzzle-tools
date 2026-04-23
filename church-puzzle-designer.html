@@ -707,14 +707,14 @@ function drawAll() {
       }
     }
     if (allHit && Object.keys(state.eyes).length > 0) {
-      // Show win message
+      // Show subtle win banner at top
       ctx.save();
-      ctx.fillStyle = 'rgba(0,0,0,0.8)';
-      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = 'rgba(30, 24, 16, 0.9)';
+      ctx.fillRect(0, 0, w, 36);
       ctx.fillStyle = '#e8c97e';
-      ctx.font = '48px Cinzel';
+      ctx.font = '16px Cinzel';
       ctx.textAlign = 'center';
-      ctx.fillText('You Win!', w / 2, h / 2);
+      ctx.fillText('All lasers hit the church!', w / 2, 24);
       ctx.restore();
     }
   }
