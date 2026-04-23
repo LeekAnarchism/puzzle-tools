@@ -572,6 +572,7 @@ function laserStartCell(edge, idx) {
 // Compute laser path. Returns array of {x1,y1,x2,y2} segments.
 function computeLaser(edge, idx) {
   const segments = [];
+  let hitsChurch = false;
   let { dr, dc } = laserDirFromEdge(edge);
   let { r, c } = laserStartCell(edge, idx);
 
@@ -592,13 +593,18 @@ function computeLaser(edge, idx) {
     const cx = BORDER + c * CELL + CELL / 2;
     const cy = BORDER + r * CELL + CELL / 2;
 
-    if (tile && tile.type === 'square') {
+    if (r === state.church.r && c === state.church.c) {
+      // Hit church, add segment to center and stop
+      segments.push({ x1: prevX, y1: prevY, x2: cx, y2: cy });
+      hitsChurch = true;
+      break;
+    } else if (tile && tile.type === 'square') {
       // Laser hits a solid building — draw up to the entry face and stop
       // Entry face center: come from direction (dr,dc), so face is offset by -0.5 cell
       const faceX = cx - dc * CELL * 0.5;
       const faceY = cy - dr * CELL * 0.5;
       segments.push({ x1: prevX, y1: prevY, x2: faceX, y2: faceY });
-      return segments; // absorbed
+      return {segments, hitsChurch}; // absorbed
     } else if (tile && tile.type === 'triangle') {
       const bounce = getTriangleBounce(tile.corner, dr, dc);
       if (bounce) {
@@ -627,7 +633,7 @@ function computeLaser(edge, idx) {
     segments.push({ x1: prevX, y1: prevY, x2: exitX, y2: exitY });
   }
 
-  return segments;
+  return {segments, hitsChurch};
 }
 
 // Returns new {dr,dc} if bounce happens, or null if laser passes through the empty half.
@@ -747,7 +753,7 @@ function drawEyeZones() {
   }
 }
 
-function drawEyeSymbol(x, y, edge) {
+function drawEyeSymbol(x, y, edge, color = '#d4864a') {
   // Draw an eye shape, oriented to look inward
   ctx.save();
   ctx.translate(x, y);
@@ -757,8 +763,8 @@ function drawEyeSymbol(x, y, edge) {
   ctx.rotate(angles[edge] || 0);
 
   const s = 18;
-  ctx.strokeStyle = '#d4864a';
-  ctx.fillStyle = 'rgba(212,134,74,0.2)';
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color === '#e8c97e' ? 'rgba(232,201,126,0.2)' : 'rgba(212,134,74,0.2)';
   ctx.lineWidth = 1.5;
 
   // Eye outline (pointing down = looking inward when rotated)
@@ -768,13 +774,13 @@ function drawEyeSymbol(x, y, edge) {
   ctx.stroke();
 
   // Pupil
-  ctx.fillStyle = '#d4864a';
+  ctx.fillStyle = color;
   ctx.beginPath();
   ctx.arc(0, 0, s * 0.15, 0, Math.PI * 2);
   ctx.fill();
 
   // Arrow showing direction
-  ctx.strokeStyle = 'rgba(212,134,74,0.5)';
+  ctx.strokeStyle = color === '#e8c97e' ? 'rgba(232,201,126,0.5)' : 'rgba(212,134,74,0.5)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(0, -s * 0.5);
@@ -789,9 +795,12 @@ function drawEyeSymbol(x, y, edge) {
 
 function drawEyes() {
   for (const key in state.eyes) {
-    const [edge, idx] = key.split(':');
-    const pos = edgeToCanvas(edge, parseInt(idx));
-    drawEyeSymbol(pos.x, pos.y, edge);
+    const [edge, idxStr] = key.split(':');
+    const idx = parseInt(idxStr);
+    const {hitsChurch} = computeLaser(edge, idx);
+    const color = hitsChurch ? '#e8c97e' : '#d4864a';
+    const pos = edgeToCanvas(edge, idx);
+    drawEyeSymbol(pos.x, pos.y, edge, color);
   }
 }
 
@@ -918,8 +927,8 @@ function drawLasers() {
   ctx.lineWidth = 1.5;
   ctx.globalAlpha = 0.8;
 
-  for (const key in state.eyes) {
-    const [edge, idxStr] = key.split(':');
+  for (con{segments} = computeLaser(edge, idx);
+    for (const seg of segment= key.split(':');
     const idx = parseInt(idxStr);
     const segs = computeLaser(edge, idx);
     for (const seg of segs) {
