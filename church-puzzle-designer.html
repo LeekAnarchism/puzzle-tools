@@ -290,6 +290,7 @@
     <button class="btn" id="btnCut" title="Cut selection (Cmd/Ctrl+X)">Cut</button>
     <button class="btn" id="btnPaste" title="Paste (Cmd/Ctrl+V)">Paste</button>
     <button class="btn" id="btnExport">Export</button>
+    <button class="btn" id="btnShare">Share</button>
     <button class="btn" id="btnImport">Import</button>
     <button class="btn danger" id="btnClear">Clear All</button>
   </div>
@@ -1815,6 +1816,23 @@ document.getElementById('modalCopy').addEventListener('click', () => {
   showStatus('Copied to clipboard!');
 });
 
+// Share
+document.getElementById('btnShare').addEventListener('click', () => {
+  const encoded = btoa(encodeURIComponent(JSON.stringify(state)));
+  const url = `${location.origin}${location.pathname}?puzzle=${encoded}`;
+  navigator.clipboard.writeText(url).then(() => {
+    showStatus('URL copied to clipboard!');
+  }).catch(() => {
+    const modal = document.getElementById('modalOverlay');
+    document.getElementById('modalTitle').textContent = 'Share URL';
+    document.getElementById('modalText').value = url;
+    document.getElementById('modalAction').textContent = 'Close';
+    document.getElementById('modalCopy').style.display = 'block';
+    modal.classList.add('open');
+    document.getElementById('modalAction').onclick = () => modal.classList.remove('open');
+  });
+});
+
 // Import
 document.getElementById('btnImport').addEventListener('click', () => {
   const modal = document.getElementById('modalOverlay');
@@ -1906,7 +1924,41 @@ function showStatus(msg) {
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
 
-loadState();
+// Load from URL query parameter
+const params = new URLSearchParams(location.search);
+const puzzleParam = params.get('puzzle');
+if (puzzleParam) {
+  try {
+    const loaded = JSON.parse(decodeURIComponent(atob(puzzleParam)));
+    Object.assign(state, loaded);
+    
+    // Enter play mode
+    playMode = true;
+    savedBuildings = JSON.parse(JSON.stringify(state.buildings));
+    mode = 'solve';
+    groups = computeGroups();
+    state.buildings = {};
+    
+    const gridRight = BORDER + state.cols * CELL;
+    let currentY = BORDER;
+    for (let i = 0; i < groups.length; i++) {
+      const group = groups[i];
+      const height = Math.max(...group.pieces.map(p => p.dr)) + 1;
+      group.x = gridRight + 40;
+      group.y = currentY;
+      group.rotation = Math.floor(Math.random() * 4);
+      currentY += height * CELL + 20;
+    }
+    
+    document.getElementById('btnMode').textContent = 'Show Solution';
+    showStatus('Loaded from URL! Ready to solve!');
+  } catch(e) {
+    console.error('Failed to load puzzle from URL:', e);
+    loadState();
+  }
+} else {
+  loadState();
+}
 
 // Sync UI inputs with loaded state
 document.getElementById('inputCols').value = state.cols;
