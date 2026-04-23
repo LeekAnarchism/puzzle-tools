@@ -284,7 +284,7 @@
   <h1>✦ Puzzle <span>Designer</span></h1>
   <div class="header-actions">
     <button class="btn" id="btnMode">Switch to Solve Mode</button>
-    <button class="btn" id="btnShowLasers">Show Lasers</button>
+    <button class="btn active" id="btnShowLasers">Hide Lasers</button>
     <button class="btn" id="btnCopy" title="Copy selection (Cmd/Ctrl+C)">Copy</button>
     <button class="btn" id="btnCut" title="Cut selection (Cmd/Ctrl+X)">Cut</button>
     <button class="btn" id="btnPaste" title="Paste (Cmd/Ctrl+V)">Paste</button>
@@ -458,7 +458,7 @@ let state = {
 let currentTool = 'select';
 let triCorner = 'NW';
 let savedBuildings = null;
-let showLasers = false;
+let showLasers = true;
 let mousePos = null;
 let isDragging = false;
 
