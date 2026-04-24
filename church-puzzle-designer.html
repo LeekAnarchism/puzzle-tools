@@ -286,6 +286,7 @@
     <button class="btn" id="btnPlay">Play Puzzle</button>
     <button class="btn" id="btnMode">Switch to Solve Mode</button>
     <button class="btn active" id="btnShowLasers">Hide Lasers</button>
+    <button class="btn" id="btnReverseLasers">Reverse</button>
     <button class="btn" id="btnCopy" title="Copy selection (Cmd/Ctrl+C)">Copy</button>
     <button class="btn" id="btnCut" title="Cut selection (Cmd/Ctrl+X)">Cut</button>
     <button class="btn" id="btnPaste" title="Paste (Cmd/Ctrl+V)">Paste</button>
@@ -461,6 +462,7 @@ let currentTool = 'select';
 let triCorner = 'NW';
 let savedBuildings = null;
 let showLasers = true;
+let reverseLasers = false;
 let mousePos = null;
 let isDragging = false;
 let hoverGroup = null; // for rotate hint in solve mode
@@ -662,6 +664,69 @@ function computeLaser(edge, idx) {
   }
 
   return {segments, hitsChurch};
+}
+
+// Compute reverse laser path from church outwards. Returns array of segments.
+function computeReverseLaser(dir) {
+  const segments = [];
+  let dr, dc;
+  switch(dir) {
+    case 'top':    dr = -1; dc = 0; break;
+    case 'bottom': dr = 1; dc = 0; break;
+    case 'left':   dr = 0; dc = -1; break;
+    case 'right':  dr = 0; dc = 1; break;
+  }
+  let r = state.church.r + dr;
+  let c = state.church.c + dc;
+  
+  const { x: startX, y: startY } = cellToCanvas(state.church.r, state.church.c);
+  const cx = startX + CELL / 2;
+  const cy = startY + CELL / 2;
+  let prevX = cx;
+  let prevY = cy;
+  
+  const maxSteps = (state.rows + state.cols) * 4;
+  for (let step = 0; step < maxSteps; step++) {
+    if (r < 0 || r >= state.rows || c < 0 || c >= state.cols) break;
+    
+    const key = `${r},${c}`;
+    const tile = getBuildingAt(r, c);
+    const cellX = BORDER + c * CELL + CELL / 2;
+    const cellY = BORDER + r * CELL + CELL / 2;
+    
+    // Laser hits square - absorbed at face
+    if (tile && tile.type === 'square') {
+      const faceX = cellX - dr * CELL * 0.5;
+      const faceY = cellY - dc * CELL * 0.5;
+      segments.push({ x1: prevX, y1: prevY, x2: faceX, y2: faceY });
+      break;
+    } else if (tile && tile.type === 'triangle') {
+      const bounce = getTriangleBounce(tile.corner, dr, dc);
+      if (bounce) {
+        // Bounce at diagonal
+        segments.push({ x1: prevX, y1: prevY, x2: cellX, y2: cellY });
+        prevX = cellX; prevY = cellY;
+        dr = bounce.dr; dc = bounce.dc;
+      } else {
+        // Passes through empty half
+        segments.push({ x1: prevX, y1: prevY, x2: cellX, y2: cellY });
+        prevX = cellX; prevY = cellY;
+      }
+    } else {
+      // Empty cell - pass through
+      segments.push({ x1: prevX, y1: prevY, x2: cellX, y2: cellY });
+      prevX = cellX; prevY = cellY;
+    }
+    
+    r += dr; c += dc;
+  }
+  
+  // Draw exit segment
+  const exitX = prevX + dc * CELL * 0.7;
+  const exitY = prevY + dr * CELL * 0.7;
+  segments.push({ x1: prevX, y1: prevY, x2: exitX, y2: exitY });
+  
+  return {segments};
 }
 
 // Returns new {dr,dc} if bounce happens, or null if laser passes through the empty half.
@@ -984,15 +1049,30 @@ function drawLasers() {
   ctx.lineWidth = 1.5;
   ctx.globalAlpha = 0.8;
 
-  for (const key in state.eyes) {
-    const [edge, idxStr] = key.split(':');
-    const idx = parseInt(idxStr);
-    const {segments} = computeLaser(edge, idx);
-    for (const seg of segments) {
-      ctx.beginPath();
-      ctx.moveTo(seg.x1, seg.y1);
-      ctx.lineTo(seg.x2, seg.y2);
-      ctx.stroke();
+  if (reverseLasers) {
+    // Draw reverse lasers from church in 4 directions
+    const dirs = ['top', 'bottom', 'left', 'right'];
+    for (const dir of dirs) {
+      const {segments} = computeReverseLaser(dir);
+      for (const seg of segments) {
+        ctx.beginPath();
+        ctx.moveTo(seg.x1, seg.y1);
+        ctx.lineTo(seg.x2, seg.y2);
+        ctx.stroke();
+      }
+    }
+  } else {
+    // Normal: draw lasers from eyes
+    for (const key in state.eyes) {
+      const [edge, idxStr] = key.split(':');
+      const idx = parseInt(idxStr);
+      const {segments} = computeLaser(edge, idx);
+      for (const seg of segments) {
+        ctx.beginPath();
+        ctx.moveTo(seg.x1, seg.y1);
+        ctx.lineTo(seg.x2, seg.y2);
+        ctx.stroke();
+      }
     }
   }
 
@@ -1741,6 +1821,13 @@ document.getElementById('btnShowLasers').addEventListener('click', function() {
   showLasers = !showLasers;
   this.classList.toggle('active', showLasers);
   this.textContent = showLasers ? 'Hide Lasers' : 'Show Lasers';
+  drawAll();
+});
+
+document.getElementById('btnReverseLasers').addEventListener('click', function() {
+  reverseLasers = !reverseLasers;
+  this.classList.toggle('active', reverseLasers);
+  this.textContent = reverseLasers ? 'Normal' : 'Reverse';
   drawAll();
 });
 
