@@ -106,6 +106,7 @@
     overflow-y: auto;
     flex-shrink: 0;
   }
+  .panel.hidden { display: none; }
 
   .panel-section {
     padding: 14px;
@@ -1785,6 +1786,7 @@ document.getElementById('btnMode').addEventListener('click', function() {
       group.inSlot = true;
     }
     this.textContent = 'Switch to Design Mode';
+    document.querySelector('.panel').classList.add('hidden');
   } else if (playMode && this.textContent === 'Try Again') {
     // Scramble groups again to their slots
     state.buildings = {};
@@ -1813,6 +1815,7 @@ document.getElementById('btnMode').addEventListener('click', function() {
     state.buildings = JSON.parse(JSON.stringify(savedBuildings));
     this.textContent = 'Switch to Solve Mode';
     playMode = false;
+    document.querySelector('.panel').classList.remove('hidden');
   }
   drawAll();
 });
@@ -1987,6 +1990,7 @@ document.getElementById('btnPlay').addEventListener('click', () => {
       }
       
       document.getElementById('btnMode').textContent = 'Show Solution';
+      document.querySelector('.panel').classList.add('hidden');
       modal.classList.remove('open');
       drawAll();
       showStatus('Ready to solve!');
@@ -2137,6 +2141,7 @@ if (puzzleParam) {
     }
     
     document.getElementById('btnMode').textContent = 'Show Solution';
+    document.querySelector('.panel').classList.add('hidden');
     showStatus('Loaded from URL! Ready to solve!');
     
     // Clear query param from URL
