@@ -325,6 +325,119 @@
     resize: none;
   }
   .modal-actions { display: flex; gap: 8px; margin-top: 12px; justify-content: flex-end; }
+
+  .print-preview {
+    display: none;
+    flex: 1;
+    overflow: auto;
+    padding: 24px;
+    background:
+      radial-gradient(circle at top, rgba(232,201,126,0.08), transparent 35%),
+      #17120e;
+  }
+
+  body.print-mode .workspace,
+  body.print-mode .statusbar {
+    display: none;
+  }
+
+  body.print-mode .print-preview {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+  }
+
+  .print-sheet {
+    width: 210mm;
+    min-height: 297mm;
+    background: #fffdf8;
+    color: #201912;
+    padding: 12mm;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+  }
+
+  .print-sheet h2 {
+    font-family: 'Cinzel', serif;
+    font-size: 14pt;
+    letter-spacing: 0.12em;
+    margin-bottom: 8mm;
+    text-align: center;
+  }
+
+  .print-grid-wrap {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 10mm;
+  }
+
+  .print-grid-svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+
+  .print-pieces h3 {
+    font-family: 'Cinzel', serif;
+    font-size: 10pt;
+    letter-spacing: 0.12em;
+    margin-bottom: 4mm;
+    text-transform: uppercase;
+  }
+
+  .print-piece-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4mm;
+    align-items: flex-start;
+  }
+
+  .print-piece {
+    border: 0.3mm dashed rgba(32,25,18,0.45);
+    padding: 2mm;
+    background: rgba(255,255,255,0.75);
+    break-inside: avoid;
+  }
+
+  .print-piece svg {
+    display: block;
+  }
+
+  @media print {
+    @page {
+      size: A4 portrait;
+      margin: 0;
+    }
+
+    body {
+      background: #fff;
+      color: #000;
+      overflow: visible;
+    }
+
+    body::before,
+    header,
+    .workspace,
+    .statusbar,
+    .modal-overlay {
+      display: none !important;
+    }
+
+    .print-preview {
+      display: block !important;
+      overflow: visible;
+      padding: 0;
+      background: #fff;
+    }
+
+    .print-sheet {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0;
+      padding: 12mm;
+      box-shadow: none;
+      page-break-inside: avoid;
+    }
+  }
 </style>
 </head>
 <body>
@@ -334,6 +447,7 @@
   <div class="header-actions">
     <button class="btn" id="btnPlay">Play Puzzle</button>
     <button class="btn" id="btnMode">Switch to Solve Mode</button>
+    <button class="btn" id="btnPrintMode">Print Mode</button>
     <button class="btn" id="btnEditLetters">Edit Letters</button>
     <button class="btn active" id="btnShowLasers">Hide Lasers</button>
     <button class="btn" id="btnReverseLasers">Reverse</button>
@@ -482,6 +596,17 @@
   </aside>
 </div>
 
+<div class="print-preview" id="printPreview">
+  <div class="print-sheet" id="printSheet">
+    <h2>Puzzle Sheet</h2>
+    <div class="print-grid-wrap" id="printGridWrap"></div>
+    <div class="print-pieces">
+      <h3>Cut-Out Pieces</h3>
+      <div class="print-piece-list" id="printPieceList"></div>
+    </div>
+  </div>
+</div>
+
 <div class="statusbar">
   <span>Tool: <span class="highlight" id="statusTool">Select</span></span>
   <span>Grid: <span class="highlight" id="statusGrid">5 × 5</span></span>
@@ -528,6 +653,7 @@ let isDragging = false;
 let hoverGroup = null; // for rotate hint in solve mode
 let editLettersMode = false;
 let activeLetterCell = null;
+let printMode = false;
 
 // ─── SOLVE MODE ──────────────────────────────────────────────────────────────
 let mode = 'design';
@@ -568,11 +694,19 @@ function normalizeStateShape() {
   if (!state.letters) state.letters = {};
 }
 
+function getDesignBuildings() {
+  if (mode === 'solve' && savedBuildings) return savedBuildings;
+  return state.buildings;
+}
+
 // ─── CANVAS SETUP ────────────────────────────────────────────────────────────
 
 const canvas = document.getElementById('mainCanvas');
 const ctx = canvas.getContext('2d');
 const canvasArea = document.getElementById('canvasArea');
+const printPreview = document.getElementById('printPreview');
+const printGridWrap = document.getElementById('printGridWrap');
+const printPieceList = document.getElementById('printPieceList');
 const solveSidebar = document.getElementById('solveSidebar');
 const solveSidebarScroll = document.getElementById('solveSidebarScroll');
 const sidebarCanvas = document.getElementById('sidebarCanvas');
@@ -610,6 +744,205 @@ function getGroupBounds(group) {
     rows: maxR - minR + 1,
     cols: maxC - minC + 1
   };
+}
+
+function computeGroupsFromBuildings(buildings) {
+  const visited = new Set();
+  const groups = [];
+
+  for (const startKey in buildings) {
+    if (visited.has(startKey)) continue;
+    const queue = [startKey];
+    const groupKeys = new Set();
+
+    while (queue.length) {
+      const key = queue.shift();
+      if (visited.has(key) || groupKeys.has(key) || !buildings[key]) continue;
+      groupKeys.add(key);
+      const [r, c] = key.split(',').map(Number);
+      for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+        const next = `${r+dr},${c+dc}`;
+        if (!visited.has(next) && buildings[next]) queue.push(next);
+      }
+    }
+
+    if (!groupKeys.size) continue;
+
+    let minR = Infinity, minC = Infinity;
+    for (const key of groupKeys) {
+      const [r, c] = key.split(',').map(Number);
+      minR = Math.min(minR, r);
+      minC = Math.min(minC, c);
+      visited.add(key);
+    }
+
+    const pieces = [];
+    for (const key of groupKeys) {
+      const [r, c] = key.split(',').map(Number);
+      pieces.push({ dr: r - minR, dc: c - minC, tile: buildings[key] });
+    }
+    groups.push({ pieces, x: 0, y: 0, sidebarX: 0, sidebarY: 0, rotation: 0, onBoard: false });
+  }
+
+  return groups;
+}
+
+function escHtml(text) {
+  return String(text)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+function eyeSvgMarkup(edge, x, y, scale = 1) {
+  const angle = { top: 0, bottom: 180, left: -90, right: 90 }[edge] || 0;
+  const s = 9 * scale;
+  return `
+    <g transform="translate(${x} ${y}) rotate(${angle})">
+      <ellipse cx="0" cy="0" rx="${(s * 0.6).toFixed(2)}" ry="${(s * 0.35).toFixed(2)}" fill="rgba(212,134,74,0.18)" stroke="#a85f35" stroke-width="${1 * scale}"/>
+      <circle cx="0" cy="0" r="${(s * 0.15).toFixed(2)}" fill="#a85f35"/>
+      <path d="M0 ${(-s * 0.5).toFixed(2)} L0 ${(s * 0.5).toFixed(2)} M${(-4 * scale).toFixed(2)} ${(s * 0.2).toFixed(2)} L0 ${(s * 0.5).toFixed(2)} L${(4 * scale).toFixed(2)} ${(s * 0.2).toFixed(2)}" stroke="rgba(168,95,53,0.7)" stroke-width="${0.9 * scale}" fill="none"/>
+    </g>
+  `;
+}
+
+function pieceSvgMarkup(piece, x, y, cell) {
+  if (piece.tile.type === 'square') {
+    return `<rect x="${x + 1}" y="${y + 1}" width="${cell - 2}" height="${cell - 2}" fill="rgba(74,122,155,0.18)" stroke="#355b75" stroke-width="1.2"/>`;
+  }
+
+  const x0 = x;
+  const y0 = y;
+  const x1 = x + cell;
+  const y1 = y + cell;
+  let points = '';
+  let diagonal = '';
+  switch (piece.tile.corner) {
+    case 'NW':
+      points = `${x0},${y0} ${x1},${y0} ${x0},${y1}`;
+      diagonal = `M ${x1} ${y0} L ${x0} ${y1}`;
+      break;
+    case 'NE':
+      points = `${x0},${y0} ${x1},${y0} ${x1},${y1}`;
+      diagonal = `M ${x0} ${y0} L ${x1} ${y1}`;
+      break;
+    case 'SW':
+      points = `${x0},${y0} ${x0},${y1} ${x1},${y1}`;
+      diagonal = `M ${x0} ${y0} L ${x1} ${y1}`;
+      break;
+    case 'SE':
+      points = `${x1},${y0} ${x1},${y1} ${x0},${y1}`;
+      diagonal = `M ${x1} ${y0} L ${x0} ${y1}`;
+      break;
+  }
+  return `
+    <rect x="${x0}" y="${y0}" width="${cell}" height="${cell}" fill="none" stroke="rgba(120,80,103,0.45)" stroke-width="1"/>
+    <polygon points="${points}" fill="rgba(155,74,122,0.2)" stroke="none"/>
+    <path d="${diagonal}" stroke="#8b4a73" stroke-width="1.6" fill="none"/>
+  `;
+}
+
+function renderPrintSheet() {
+  const buildings = getDesignBuildings();
+  const groupsForPrint = computeGroupsFromBuildings(buildings);
+  const cell = Math.max(18, Math.min(36, Math.floor(520 / Math.max(state.cols, state.rows, 1))));
+  const border = Math.round(cell * 0.9);
+  const width = border * 2 + state.cols * cell;
+  const height = border * 2 + state.rows * cell;
+
+  let svg = `
+    <svg class="print-grid-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="Puzzle grid">
+      <rect width="${width}" height="${height}" fill="#fffdf8"/>
+      <rect x="${border}" y="${border}" width="${state.cols * cell}" height="${state.rows * cell}" fill="#fbf7ef" stroke="#5d4a2f" stroke-width="1.4"/>
+  `;
+
+  for (let r = 0; r <= state.rows; r++) {
+    const y = border + r * cell;
+    svg += `<line x1="${border}" y1="${y}" x2="${border + state.cols * cell}" y2="${y}" stroke="rgba(93,74,47,0.35)" stroke-width="1"/>`;
+  }
+  for (let c = 0; c <= state.cols; c++) {
+    const x = border + c * cell;
+    svg += `<line x1="${x}" y1="${border}" x2="${x}" y2="${border + state.rows * cell}" stroke="rgba(93,74,47,0.35)" stroke-width="1"/>`;
+  }
+
+  for (const key in state.letters) {
+    const letter = state.letters[key];
+    if (!letter) continue;
+    const [r, c] = key.split(',').map(Number);
+    const x = border + c * cell + cell / 2;
+    const y = border + r * cell + cell / 2 + cell * 0.04;
+    svg += `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" font-family="Cinzel, serif" font-weight="600" font-size="${Math.round(cell * 0.52)}" fill="#241b14">${escHtml(letter)}</text>`;
+  }
+
+  const churchX = border + state.church.c * cell;
+  const churchY = border + state.church.r * cell;
+  const cx = churchX + cell / 2;
+  const cy = churchY + cell / 2;
+  const s = cell * 0.34;
+  svg += `
+    <rect x="${churchX + 2}" y="${churchY + 2}" width="${cell - 4}" height="${cell - 4}" fill="rgba(232,201,126,0.12)" stroke="#9b7a31" stroke-width="1.2"/>
+    <rect x="${cx - s * 0.5}" y="${cy - s * 0.2}" width="${s}" height="${s * 0.8}" fill="rgba(232,201,126,0.38)" stroke="#9b7a31" stroke-width="1.2"/>
+    <path d="M ${cx} ${cy - s * 1.1} L ${cx} ${cy - s * 0.2} M ${cx - s * 0.3} ${cy - s * 0.65} L ${cx + s * 0.3} ${cy - s * 0.65}" stroke="#9b7a31" stroke-width="1.2" fill="none"/>
+  `;
+
+  const eyeCenter = cell / 2;
+  for (const key in state.eyes) {
+    const [edge, idxStr] = key.split(':');
+    const idx = parseInt(idxStr, 10);
+    let x = 0;
+    let y = 0;
+    if (edge === 'top') { x = border + idx * cell + eyeCenter; y = border / 2; }
+    if (edge === 'bottom') { x = border + idx * cell + eyeCenter; y = border + state.rows * cell + border / 2; }
+    if (edge === 'left') { x = border / 2; y = border + idx * cell + eyeCenter; }
+    if (edge === 'right') { x = border + state.cols * cell + border / 2; y = border + idx * cell + eyeCenter; }
+    svg += eyeSvgMarkup(edge, x, y, cell / 26);
+  }
+
+  svg += `</svg>`;
+  printGridWrap.innerHTML = svg;
+
+  if (!groupsForPrint.length) {
+    printPieceList.innerHTML = '<div class="print-piece">No pieces</div>';
+    return;
+  }
+
+  const pieceCell = Math.max(18, Math.min(28, Math.floor(360 / Math.max(state.cols, state.rows, 1))));
+  printPieceList.innerHTML = groupsForPrint.map(group => {
+    const maxDr = Math.max(...group.pieces.map(p => p.dr));
+    const maxDc = Math.max(...group.pieces.map(p => p.dc));
+    const svgWidth = (maxDc + 1) * pieceCell;
+    const svgHeight = (maxDr + 1) * pieceCell;
+    const content = group.pieces.map(piece => {
+      const x = piece.dc * pieceCell;
+      const y = piece.dr * pieceCell;
+      return pieceSvgMarkup(piece, x, y, pieceCell);
+    }).join('');
+    return `
+      <div class="print-piece">
+        <svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}" viewBox="0 0 ${svgWidth} ${svgHeight}" role="img" aria-label="Puzzle piece">
+          ${content}
+        </svg>
+      </div>
+    `;
+  }).join('');
+}
+
+function setPrintMode(enabled) {
+  printMode = enabled;
+  document.body.classList.toggle('print-mode', printMode);
+  const btn = document.getElementById('btnPrintMode');
+  btn.classList.toggle('active', printMode);
+  btn.textContent = printMode ? 'Exit Print Mode' : 'Print Mode';
+  if (printMode) {
+    if (editLettersMode) setEditLettersMode(false);
+    renderPrintSheet();
+    printPreview.scrollTop = 0;
+  }
+}
+
+function refreshPrintSheetIfNeeded() {
+  if (printMode) renderPrintSheet();
 }
 
 function resizeSidebarCanvas() {
@@ -899,6 +1232,7 @@ function drawAll() {
   const { w, h } = canvasSize();
   ctx.clearRect(0, 0, w, h);
   sidebarCtx.clearRect(0, 0, sidebarCanvas.width, sidebarCanvas.height);
+  refreshPrintSheetIfNeeded();
 
   drawBackground();
   drawGrid();
@@ -1448,32 +1782,7 @@ function floodSelectGroup(r, c) {
 }
 
 function computeGroups() {
-  const visited = new Set();
-  const groups = [];
-  for (const key in state.buildings) {
-    if (visited.has(key)) continue;
-    const [r, c] = key.split(',').map(Number);
-    const groupKeys = floodSelectGroup(r, c);
-    if (groupKeys.size > 0) {
-      // Compute bounding box
-      let minR = Infinity, minC = Infinity, maxR = -Infinity, maxC = -Infinity;
-      for (const k of groupKeys) {
-        const [rr, cc] = k.split(',').map(Number);
-        minR = Math.min(minR, rr);
-        minC = Math.min(minC, cc);
-        maxR = Math.max(maxR, rr);
-        maxC = Math.max(maxC, cc);
-      }
-      const pieces = [];
-      for (const k of groupKeys) {
-        const [rr, cc] = k.split(',').map(Number);
-        pieces.push({dr: rr - minR, dc: cc - minC, tile: state.buildings[k]});
-      }
-      groups.push({pieces, x: 0, y: 0, sidebarX: 0, sidebarY: 0, rotation: 0, onBoard: false});
-      groupKeys.forEach(k => visited.add(k));
-    }
-  }
-  return groups;
+  return computeGroupsFromBuildings(state.buildings);
 }
 
 function selectionBBox() {
@@ -2046,6 +2355,11 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
+  if (e.key === 'Escape' && printMode) {
+    setPrintMode(false);
+    return;
+  }
+
   if (e.key === 'Delete' || e.key === 'Backspace') {
     if (selectedCells.size > 0) { e.preventDefault(); deleteSelection(); }
   }
@@ -2108,7 +2422,12 @@ document.getElementById('btnEditLetters').addEventListener('click', () => {
   setEditLettersMode(!editLettersMode);
 });
 
+document.getElementById('btnPrintMode').addEventListener('click', () => {
+  setPrintMode(!printMode);
+});
+
 document.getElementById('btnMode').addEventListener('click', function() {
+  if (printMode) setPrintMode(false);
   if (mode === 'design') {
     // Save buildings before entering solve mode
     setEditLettersMode(false);
@@ -2271,6 +2590,7 @@ document.getElementById('btnShare').addEventListener('click', () => {
 
 // Import
 document.getElementById('btnImport').addEventListener('click', () => {
+  if (printMode) setPrintMode(false);
   const modal = document.getElementById('modalOverlay');
   document.getElementById('modalTitle').textContent = 'Import State';
   document.getElementById('modalText').value = '';
@@ -2298,6 +2618,7 @@ document.getElementById('btnImport').addEventListener('click', () => {
 
 // Play Puzzle
 document.getElementById('btnPlay').addEventListener('click', () => {
+  if (printMode) setPrintMode(false);
   const modal = document.getElementById('modalOverlay');
   document.getElementById('modalTitle').textContent = 'Play Puzzle';
   document.getElementById('modalText').value = '';
