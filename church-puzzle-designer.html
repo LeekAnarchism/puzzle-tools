@@ -610,8 +610,9 @@ function layoutSidebarGroups() {
   const availableWidth = Math.max(0, sidebarCanvas.width - SIDEBAR_PADDING * 2);
   let currentY = SIDEBAR_PADDING;
 
-  for (const group of groups) {
-    if (group.onBoard) continue;
+  for (let i = 0; i < groups.length; i++) {
+    const group = groups[i];
+    if (group.onBoard || selectedGroup === i) continue;
     const bounds = getGroupBounds(group);
     const pieceWidth = bounds.cols * CELL;
     const pieceHeight = bounds.rows * CELL;
@@ -1834,6 +1835,7 @@ sidebarCanvas.addEventListener('mousedown', (e) => {
   if (selectedGroup === null) return;
   const group = groups[selectedGroup];
   dragOffset = { dx: group.sidebarX - x, dy: group.sidebarY - y };
+  layoutSidebarGroups();
   drawAll();
 });
 
@@ -1877,6 +1879,8 @@ window.addEventListener('mouseup', (e) => {
   const placed = placeGroupOnBoard(group, e.clientX, e.clientY);
   if (!placed) {
     sendGroupToSidebar(group);
+  } else {
+    layoutSidebarGroups();
   }
   selectedGroup = null;
   dragOffset = null;
