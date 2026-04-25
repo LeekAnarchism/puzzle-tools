@@ -892,10 +892,17 @@ function renderPrintSheet() {
     const idx = parseInt(idxStr, 10);
     let x = 0;
     let y = 0;
+    let gridX = 0;
+    let gridY = 0;
     if (edge === 'top') { x = border + idx * cell + eyeCenter; y = border / 2; }
     if (edge === 'bottom') { x = border + idx * cell + eyeCenter; y = border + state.rows * cell + border / 2; }
     if (edge === 'left') { x = border / 2; y = border + idx * cell + eyeCenter; }
     if (edge === 'right') { x = border + state.cols * cell + border / 2; y = border + idx * cell + eyeCenter; }
+    if (edge === 'top') { gridX = x; gridY = border; }
+    if (edge === 'bottom') { gridX = x; gridY = border + state.rows * cell; }
+    if (edge === 'left') { gridX = border; gridY = y; }
+    if (edge === 'right') { gridX = border + state.cols * cell; gridY = y; }
+    svg += `<line x1="${x}" y1="${y}" x2="${gridX}" y2="${gridY}" stroke="rgba(168,95,53,0.6)" stroke-width="${Math.max(0.8, cell / 30)}" stroke-dasharray="${Math.max(2, cell / 8)} ${Math.max(2, cell / 10)}"/>`;
     svg += eyeSvgMarkup(edge, x, y, cell / 26);
   }
 
