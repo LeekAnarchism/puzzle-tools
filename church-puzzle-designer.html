@@ -2554,8 +2554,8 @@ document.getElementById('btnClear').addEventListener('click', () => {
 // Export
 document.getElementById('btnExport').addEventListener('click', () => {
   const modal = document.getElementById('modalOverlay');
-  document.getElementById('modalTitle').textContent = 'Export State';
-  document.getElementById('modalText').value = JSON.stringify(state, null, 2);
+  document.getElementById('modalTitle').textContent = 'Export Puzzle YAML';
+  document.getElementById('modalText').value = puzzleToYaml(snapshotPuzzleState());
   document.getElementById('modalAction').textContent = 'Close';
   document.getElementById('modalCopy').style.display = 'block';
   modal.classList.add('open');
@@ -2571,7 +2571,7 @@ document.getElementById('modalCopy').addEventListener('click', () => {
 
 // Share
 document.getElementById('btnShare').addEventListener('click', () => {
-  const encoded = encodePuzzle(state);
+  const encoded = encodePuzzle(snapshotPuzzleState());
   const url = `${location.origin}${location.pathname}?puzzle=${encoded}`;
   navigator.clipboard.writeText(url).then(() => {
     showStatus('URL copied to clipboard!');
@@ -2590,26 +2590,19 @@ document.getElementById('btnShare').addEventListener('click', () => {
 document.getElementById('btnImport').addEventListener('click', () => {
   if (printMode) setPrintMode(false);
   const modal = document.getElementById('modalOverlay');
-  document.getElementById('modalTitle').textContent = 'Import State';
+  document.getElementById('modalTitle').textContent = 'Import Puzzle YAML';
   document.getElementById('modalText').value = '';
   document.getElementById('modalAction').textContent = 'Import';
   document.getElementById('modalCopy').style.display = 'none';
   modal.classList.add('open');
   document.getElementById('modalAction').onclick = () => {
     try {
-      const parsed = JSON.parse(document.getElementById('modalText').value);
-      Object.assign(state, parsed);
-      normalizeStateShape();
-      document.getElementById('inputCols').value = state.cols;
-      document.getElementById('inputRows').value = state.rows;
-      document.getElementById('statusGrid').textContent = `${state.cols} × ${state.rows}`;
-      saveState();
-      resizeCanvas();
-      drawAll();
+      const parsed = yamlToPuzzle(document.getElementById('modalText').value);
+      applyLoadedPuzzle(parsed);
       modal.classList.remove('open');
       showStatus('Imported successfully!');
     } catch(e) {
-      alert('Invalid JSON: ' + e.message);
+      alert('Invalid YAML: ' + e.message);
     }
   };
 });
@@ -2625,12 +2618,9 @@ document.getElementById('btnPlay').addEventListener('click', () => {
   modal.classList.add('open');
   document.getElementById('modalAction').onclick = () => {
     try {
-      const parsed = JSON.parse(document.getElementById('modalText').value);
+      const parsed = yamlToPuzzle(document.getElementById('modalText').value);
       // Load puzzle state
-      Object.assign(state, parsed);
-      document.getElementById('inputCols').value = state.cols;
-      document.getElementById('inputRows').value = state.rows;
-      document.getElementById('statusGrid').textContent = `${state.cols} × ${state.rows}`;
+      applyLoadedPuzzle(parsed);
       resizeCanvas();
       
       // Enter play mode (solve mode with saved design)
@@ -2668,6 +2658,210 @@ function showStatus(msg) {
   const el = document.getElementById('statusMsg');
   el.textContent = msg;
   setTimeout(() => { el.textContent = ''; }, 2500);
+}
+
+function snapshotPuzzleState() {
+  return {
+    cols: state.cols,
+    rows: state.rows,
+    church: JSON.parse(JSON.stringify(state.church)),
+    eyes: JSON.parse(JSON.stringify(state.eyes)),
+    letters: JSON.parse(JSON.stringify(state.letters || {})),
+    buildings: JSON.parse(JSON.stringify(getDesignBuildings()))
+  };
+}
+
+function applyLoadedPuzzle(parsed) {
+  mode = 'design';
+  playMode = false;
+  savedBuildings = null;
+  groups = [];
+  selectedGroup = null;
+  dragOffset = null;
+  hoverGroup = null;
+  selectedCells.clear();
+  moveDrag = null;
+  dragRectAnchor = null;
+  dragRectCurrent = null;
+  setSolveSidebarVisible(false);
+  setEditLettersMode(false);
+  if (printMode) setPrintMode(false);
+  document.querySelector('.panel').classList.remove('hidden');
+  document.getElementById('btnMode').textContent = 'Switch to Solve Mode';
+  Object.assign(state, parsed);
+  normalizeStateShape();
+  document.getElementById('inputCols').value = state.cols;
+  document.getElementById('inputRows').value = state.rows;
+  document.getElementById('statusGrid').textContent = `${state.cols} × ${state.rows}`;
+  saveState();
+  resizeCanvas();
+  drawAll();
+}
+
+function puzzleToYaml(snapshot) {
+  const width = snapshot.cols;
+  const height = snapshot.rows;
+  const mapRows = Array.from({ length: height + 2 }, () => Array(width + 2).fill('.'));
+  const textRows = Array.from({ length: height }, () => Array(width).fill('.'));
+  const triangleChars = { NW: 'N', NE: 'E', SW: 'W', SE: 'S' };
+
+  for (const key in snapshot.eyes) {
+    const [edge, idxStr] = key.split(':');
+    const idx = parseInt(idxStr, 10);
+    if (edge === 'top' && idx >= 0 && idx < width) mapRows[0][idx + 1] = 'O';
+    if (edge === 'bottom' && idx >= 0 && idx < width) mapRows[height + 1][idx + 1] = 'O';
+    if (edge === 'left' && idx >= 0 && idx < height) mapRows[idx + 1][0] = 'O';
+    if (edge === 'right' && idx >= 0 && idx < height) mapRows[idx + 1][width + 1] = 'O';
+  }
+
+  for (const key in snapshot.buildings) {
+    const [r, c] = key.split(',').map(Number);
+    const tile = snapshot.buildings[key];
+    mapRows[r + 1][c + 1] = tile.type === 'triangle' ? triangleChars[tile.corner] : 'X';
+  }
+
+  mapRows[snapshot.church.r + 1][snapshot.church.c + 1] = 'C';
+
+  for (const key in snapshot.letters) {
+    const [r, c] = key.split(',').map(Number);
+    const letter = String(snapshot.letters[key] || '').slice(0, 1);
+    if (letter) textRows[r][c] = letter;
+  }
+
+  const mapBlock = mapRows.map(row => `  ${row.join('')}`).join('\n');
+  const textBlock = textRows.map(row => `  ${row.join('')}`).join('\n');
+  return [
+    `height: ${height}`,
+    `width: ${width}`,
+    'map: |',
+    mapBlock,
+    'text: |',
+    textBlock
+  ].join('\n');
+}
+
+function parseYamlBlock(lines, startIndex) {
+  const block = [];
+  let i = startIndex;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.startsWith('  ')) {
+      block.push(line.slice(2));
+      i += 1;
+      continue;
+    }
+    if (line.trim() === '') {
+      block.push('');
+      i += 1;
+      continue;
+    }
+    break;
+  }
+  return { block, nextIndex: i };
+}
+
+function yamlToPuzzle(text) {
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  let width = null;
+  let height = null;
+  let mapBlock = null;
+  let textBlock = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trimEnd();
+    if (!line.trim()) continue;
+    let match = line.match(/^height:\s*(\d+)\s*$/);
+    if (match) { height = parseInt(match[1], 10); continue; }
+    match = line.match(/^width:\s*(\d+)\s*$/);
+    if (match) { width = parseInt(match[1], 10); continue; }
+    if (/^map:\s*\|?\s*$/.test(line)) {
+      const parsed = parseYamlBlock(lines, i + 1);
+      mapBlock = parsed.block;
+      i = parsed.nextIndex - 1;
+      continue;
+    }
+    if (/^text:\s*\|?\s*$/.test(line)) {
+      const parsed = parseYamlBlock(lines, i + 1);
+      textBlock = parsed.block;
+      i = parsed.nextIndex - 1;
+      continue;
+    }
+  }
+
+  if (!Number.isInteger(width) || !Number.isInteger(height)) {
+    throw new Error('YAML must include integer width and height');
+  }
+  if (width < 2 || height < 2 || width > 20 || height > 20) {
+    throw new Error('Width and height must be between 2 and 20');
+  }
+  if (!mapBlock || !textBlock) {
+    throw new Error('YAML must include both map and text blocks');
+  }
+  if (mapBlock.length !== height + 2) {
+    throw new Error(`Map block must have exactly ${height + 2} rows`);
+  }
+  if (textBlock.length !== height) {
+    throw new Error(`Text block must have exactly ${height} rows`);
+  }
+
+  const mirrorChars = { N: 'NW', E: 'NE', W: 'SW', S: 'SE' };
+  const eyes = {};
+  const letters = {};
+  const buildings = {};
+  let church = null;
+
+  for (let r = 0; r < mapBlock.length; r++) {
+    const row = mapBlock[r];
+    if (row.length !== width + 2) {
+      throw new Error(`Map row ${r + 1} must be exactly ${width + 2} characters wide`);
+    }
+    for (let c = 0; c < row.length; c++) {
+      const ch = row[c];
+      const onBorder = r === 0 || c === 0 || r === height + 1 || c === width + 1;
+      if (onBorder) {
+        if (ch === '.') continue;
+        if (ch !== 'O') throw new Error('Border cells in map may only use O or .');
+        if (r === 0 && c > 0 && c <= width) eyes[`top:${c - 1}`] = true;
+        if (r === height + 1 && c > 0 && c <= width) eyes[`bottom:${c - 1}`] = true;
+        if (c === 0 && r > 0 && r <= height) eyes[`left:${r - 1}`] = true;
+        if (c === width + 1 && r > 0 && r <= height) eyes[`right:${r - 1}`] = true;
+        continue;
+      }
+
+      const key = `${r - 1},${c - 1}`;
+      if (ch === '.') continue;
+      if (ch === 'X') {
+        buildings[key] = { type: 'square' };
+        continue;
+      }
+      if (ch === 'C') {
+        church = { r: r - 1, c: c - 1 };
+        continue;
+      }
+      if (mirrorChars[ch]) {
+        buildings[key] = { type: 'triangle', corner: mirrorChars[ch] };
+        continue;
+      }
+      throw new Error(`Unsupported map character "${ch}" at row ${r + 1}, column ${c + 1}`);
+    }
+  }
+
+  if (!church) {
+    throw new Error('Map must include exactly one C for the church');
+  }
+
+  for (let r = 0; r < textBlock.length; r++) {
+    const row = textBlock[r];
+    if (row.length !== width) {
+      throw new Error(`Text row ${r + 1} must be exactly ${width} characters wide`);
+    }
+    for (let c = 0; c < row.length; c++) {
+      const ch = row[c];
+      if (ch !== '.') letters[`${r},${c}`] = ch;
+    }
+  }
+
+  return { cols: width, rows: height, church, eyes, buildings, letters };
 }
 
 // Compact encoding: custom binary format for minimal size
