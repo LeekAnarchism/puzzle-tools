@@ -207,15 +207,19 @@
   .canvas-area {
     flex: 1;
     display: flex;
-    align-items: center;
-    justify-content: center;
+    align-items: flex-start;
+    justify-content: flex-start;
     overflow: auto;
     position: relative;
+    min-width: 0;
+    min-height: 0;
+    padding: 20px;
   }
 
   .grid-wrapper {
     position: relative;
     user-select: none;
+    flex-shrink: 0;
   }
 
   .solve-sidebar {
@@ -559,6 +563,7 @@ function loadState() {
 
 const canvas = document.getElementById('mainCanvas');
 const ctx = canvas.getContext('2d');
+const canvasArea = document.getElementById('canvasArea');
 const solveSidebar = document.getElementById('solveSidebar');
 const solveSidebarScroll = document.getElementById('solveSidebarScroll');
 const sidebarCanvas = document.getElementById('sidebarCanvas');
@@ -640,6 +645,11 @@ function setSolveSidebarVisible(visible) {
     resizeSidebarCanvas();
     layoutSidebarGroups();
   }
+}
+
+function resetBoardViewport() {
+  canvasArea.scrollTop = 0;
+  canvasArea.scrollLeft = 0;
 }
 
 function resizeCanvas() {
@@ -1963,12 +1973,14 @@ document.getElementById('btnMode').addEventListener('click', function() {
     this.textContent = 'Switch to Design Mode';
     document.querySelector('.panel').classList.add('hidden');
     setSolveSidebarVisible(true);
+    resetBoardViewport();
   } else if (playMode && this.textContent === 'Try Again') {
     // Scramble groups again to their slots
     state.buildings = {};
     groups = computeGroups();
     resetGroupsToSidebar(true);
     this.textContent = 'Show Solution';
+    resetBoardViewport();
     drawAll();
     showStatus('Try again!');
   } else if (playMode) {
@@ -2151,6 +2163,7 @@ document.getElementById('btnPlay').addEventListener('click', () => {
       document.getElementById('btnMode').textContent = 'Show Solution';
       document.querySelector('.panel').classList.add('hidden');
       setSolveSidebarVisible(true);
+      resetBoardViewport();
       modal.classList.remove('open');
       drawAll();
       showStatus('Ready to solve!');
@@ -2293,6 +2306,7 @@ if (puzzleParam) {
     document.getElementById('btnMode').textContent = 'Show Solution';
     document.querySelector('.panel').classList.add('hidden');
     setSolveSidebarVisible(true);
+    resetBoardViewport();
     showStatus('Loaded from URL! Ready to solve!');
     
     // Clear query param from URL
