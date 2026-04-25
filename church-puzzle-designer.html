@@ -904,7 +904,7 @@ function renderPrintSheet() {
     if (edge === 'bottom') { gridX = x; gridY = border + state.rows * cell; }
     if (edge === 'left') { gridX = border; gridY = y; }
     if (edge === 'right') { gridX = border + state.cols * cell; gridY = y; }
-    svg += `<line x1="${x}" y1="${y}" x2="${gridX}" y2="${gridY}" stroke="rgba(168,95,53,0.6)" stroke-width="${Math.max(0.8, cell / 30)}" stroke-dasharray="${Math.max(2, cell / 8)} ${Math.max(2, cell / 10)}"/>`;
+    svg += `<line x1="${x}" y1="${y}" x2="${gridX}" y2="${gridY}" stroke="rgba(200,77,58,0.82)" stroke-width="${Math.max(0.8, cell / 30)}" stroke-dasharray="${Math.max(2, cell / 8)} ${Math.max(2, cell / 10)}"/>`;
     svg += eyeSvgMarkup(edge, x, y, cell / 26);
   }
 
@@ -1100,8 +1100,10 @@ function computeLaser(edge, idx) {
     const cy = BORDER + r * CELL + CELL / 2;
 
     if (r === state.church.r && c === state.church.c) {
-      // Hit church, add segment to center and stop
-      segments.push({ x1: prevX, y1: prevY, x2: cx, y2: cy });
+      // Stop at the church boundary rather than the center
+      const faceX = cx - dc * CELL * 0.5;
+      const faceY = cy - dr * CELL * 0.5;
+      segments.push({ x1: prevX, y1: prevY, x2: faceX, y2: faceY });
       hitsChurch = true;
       break;
     } else if (tile && tile.type === 'square') {
@@ -1246,8 +1248,8 @@ function drawAll() {
   drawBackground();
   drawGrid();
   drawEyeZones();
-  if (!editLettersMode) drawBuildings();
   drawLetters();
+  if (!editLettersMode) drawBuildings();
   drawChurch();
   drawEyes();
   if (showLasers) drawLasers();
@@ -1457,7 +1459,7 @@ function drawBuildings() {
     const { x, y } = cellToCanvas(r, c);
 
     if (tile.type === 'square') {
-      ctx.fillStyle = 'rgba(74,122,155,0.18)';
+      ctx.fillStyle = '#dfe8ef';
       ctx.fillRect(x + 2, y + 2, CELL - 4, CELL - 4);
       ctx.strokeStyle = '#355b75';
       ctx.lineWidth = 1.5;
@@ -1532,7 +1534,7 @@ function drawTriangleTile(x, y, corner, targetCtx = ctx) {
   const x1 = x + CELL, y1 = y + CELL;
 
   // Solid triangle (the filled half)
-  targetCtx.fillStyle = 'rgba(155,74,122,0.2)';
+  targetCtx.fillStyle = '#ead8e3';
   targetCtx.beginPath();
   switch(corner) {
     case 'NW': targetCtx.moveTo(x0,y0); targetCtx.lineTo(x1,y0); targetCtx.lineTo(x0,y1); break; // top-left triangle
@@ -1563,11 +1565,11 @@ function drawTriangleTile(x, y, corner, targetCtx = ctx) {
 
 function drawLasers() {
   ctx.save();
-  ctx.strokeStyle = '#4af0b8';
-  ctx.shadowColor = '#4af0b8';
-  ctx.shadowBlur = 8;
-  ctx.lineWidth = 1.5;
-  ctx.globalAlpha = 0.8;
+  ctx.strokeStyle = '#c84d3a';
+  ctx.shadowColor = 'rgba(200,77,58,0.18)';
+  ctx.shadowBlur = 4;
+  ctx.lineWidth = 1.8;
+  ctx.globalAlpha = 0.92;
 
   if (reverseLasers) {
     // Draw reverse lasers from church in 4 directions
