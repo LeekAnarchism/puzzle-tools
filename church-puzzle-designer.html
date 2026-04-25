@@ -916,7 +916,7 @@ function renderPrintSheet() {
     return;
   }
 
-  const pieceCell = Math.max(18, Math.min(28, Math.floor(360 / Math.max(state.cols, state.rows, 1))));
+  const pieceCell = cell;
   printPieceList.innerHTML = groupsForPrint.map(group => {
     const maxDr = Math.max(...group.pieces.map(p => p.dr));
     const maxDc = Math.max(...group.pieces.map(p => p.dc));
