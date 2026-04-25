@@ -2922,11 +2922,20 @@ function encodePuzzle(s) {
   for (let i = 0; i < bytes.length; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
-  return btoa(binary);
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
 }
 
 function decodePuzzle(encoded) {
-  const binary = atob(encoded);
+  const normalized = String(encoded)
+    .trim()
+    .replace(/\s+/g, '+')
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+  const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
+  const binary = atob(padded);
   const bytes = [];
   for (let i = 0; i < binary.length; i++) {
     bytes.push(binary.charCodeAt(i));
