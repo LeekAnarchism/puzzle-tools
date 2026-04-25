@@ -882,7 +882,7 @@ function renderPrintSheet() {
   const s = cell * 0.34;
   svg += `
     <rect x="${churchX + 2}" y="${churchY + 2}" width="${cell - 4}" height="${cell - 4}" fill="rgba(232,201,126,0.12)" stroke="#9b7a31" stroke-width="1.2"/>
-    <rect x="${cx - s * 0.5}" y="${cy - s * 0.2}" width="${s}" height="${s * 0.8}" fill="rgba(232,201,126,0.38)" stroke="#9b7a31" stroke-width="1.2"/>
+    <rect x="${cx - s * 0.5}" y="${cy - s * 0.2}" width="${s}" height="${s * 0.8}" fill="rgba(232,201,126,0.8)" stroke="#9b7a31" stroke-width="1.2"/>
     <path d="M ${cx} ${cy - s * 1.1} L ${cx} ${cy - s * 0.2} M ${cx - s * 0.3} ${cy - s * 0.65} L ${cx + s * 0.3} ${cy - s * 0.65}" stroke="#9b7a31" stroke-width="1.2" fill="none"/>
   `;
 
