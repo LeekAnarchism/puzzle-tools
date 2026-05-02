@@ -1,0 +1,160 @@
+
+<style>
+  .wrap { padding: 1.5rem 0; font-family: var(--font-sans); }
+  .row { display: flex; gap: 12px; margin-bottom: 1rem; flex-wrap: wrap; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 160px; }
+  label { font-size: 13px; color: var(--color-text-secondary); }
+  .hint { font-size: 12px; color: var(--color-text-tertiary); margin-top: 2px; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1rem; }
+  .btn { padding: 7px 18px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: transparent; cursor: pointer; font-size: 14px; color: var(--color-text-primary); }
+  .btn:hover { background: var(--color-background-secondary); }
+  .btn.on { background: #cc0000; color: white; border-color: #cc0000; }
+  h3 { font-size: 15px; font-weight: 500; margin: 0 0 0.75rem; color: var(--color-text-primary); }
+  .canvas-wrap { position: relative; display: inline-block; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-tertiary); overflow: hidden; }
+  #filterOverlay { display: none; position: absolute; inset: 0; background: hsl(0,100%,50%); mix-blend-mode: multiply; pointer-events: none; }
+  #filterOverlay.on { display: block; }
+</style>
+
+<div class="wrap">
+  <h2 class="sr-only">7-segment hidden message encoder</h2>
+  <h3>Hidden message encoder</h3>
+  <div class="row">
+    <div class="field">
+      <label>Secret message</label>
+      <input type="text" id="secret" value="RED REVEAL" maxlength="16" style="text-transform:uppercase;">
+      <span class="hint">Letters A–Z, 0–9, spaces</span>
+    </div>
+    <div class="field">
+      <label>Decoy style</label>
+      <select id="decoy">
+        <option value="none">No decoy (test mode)</option>
+        <option value="eights">All eights (max fill)</option>
+        <option value="random" selected>Random characters</option>
+        <option value="keyboard">Keyboard-row noise</option>
+      </select>
+    </div>
+  </div>
+  <div class="controls">
+    <button class="btn" id="genBtn">Generate</button>
+    <button class="btn" id="filtBtn">Toggle red filter</button>
+    <button class="btn" id="dlBtn">Download PNG</button>
+  </div>
+  <div class="canvas-wrap">
+    <canvas id="c"></canvas>
+    <div id="filterOverlay"></div>
+  </div>
+</div>
+
+<script>
+const S = {
+  '0':[1,1,1,1,1,1,0],'1':[0,1,1,0,0,0,0],'2':[1,1,0,1,1,0,1],
+  '3':[1,1,1,1,0,0,1],'4':[0,1,1,0,0,1,1],'5':[1,0,1,1,0,1,1],
+  '6':[1,0,1,1,1,1,1],'7':[1,1,1,0,0,0,0],'8':[1,1,1,1,1,1,1],
+  '9':[1,1,1,1,0,1,1],
+  'A':[1,1,1,0,1,1,1],'B':[0,0,1,1,1,1,1],'C':[1,0,0,1,1,1,0],
+  'D':[0,1,1,1,1,0,1],'E':[1,0,0,1,1,1,1],'F':[1,0,0,0,1,1,1],
+  'G':[1,0,1,1,1,1,0],'H':[0,1,1,0,1,1,1],'I':[0,0,0,0,0,1,0],
+  'J':[0,1,1,1,1,0,0],'K':[1,0,0,0,1,1,1],'L':[0,0,0,1,1,1,0],
+  'M':[1,1,0,0,1,1,0],'N':[0,0,1,0,1,1,1],'O':[1,1,1,1,1,1,0],
+  'P':[1,1,0,0,1,1,1],'Q':[1,1,1,0,0,1,1],'R':[0,0,0,0,1,1,1],
+  'S':[1,0,1,1,0,1,1],'T':[0,0,0,1,1,1,1],'U':[0,1,1,1,1,1,0],
+  'V':[0,0,1,1,1,0,0],'W':[0,1,1,1,1,1,0],'X':[0,1,1,0,1,1,1],
+  'Y':[0,1,1,1,0,1,1],'Z':[1,1,0,1,1,0,1],' ':[0,0,0,0,0,0,0]
+};
+
+const POOL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+const KROWS = ['QWERTYUIOP','ASDFGHJKL','ZXCVBNM'];
+
+// Secret: hues 90–270 (no red component), sat 100%, light 40%
+function nonRedColor() {
+  const hue = 90 + Math.random() * 180;
+  return `hsl(${hue.toFixed(0)},100%,40%)`;
+}
+
+// Decoy: red-heavy hues — wrapping around 0°, covering reds, oranges, pinks, magentas.
+// Hues 300–360 (magenta→red) and 0–45 (red→orange-yellow), sat 100%, light 40%.
+function redHeavyColor() {
+  const hue = Math.random() < 0.5
+    ? 300 + Math.random() * 60   // 300–360: magenta, hot pink, red
+    :       Math.random() * 45;  // 0–45:   red, vermillion, orange
+  return `hsl(${hue.toFixed(0)},100%,40%)`;
+}
+
+function rnd(a){ return a[Math.floor(Math.random()*a.length)]; }
+
+function pickDecoy(mode, secretChar){
+  if(mode==='none')     return ' ';
+  if(mode==='eights')   return '8';
+  if(mode==='keyboard') return rnd(rnd(KROWS));
+  let c;
+  do { c = POOL[Math.floor(Math.random()*POOL.length)]; } while(c===secretChar);
+  return c;
+}
+
+const SW=22, SH=40, T=4, CW=36, CH=56, PAD=10;
+
+function drawSeg(ctx, x, y, si, color){
+  const W=SW, H=SH, r=1.5;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  switch(si){
+    case 0: ctx.moveTo(x+T,y);       ctx.lineTo(x+W-T,y);     ctx.lineTo(x+W-T+r,y+T);   ctx.lineTo(x+T-r,y+T);     break;
+    case 1: ctx.moveTo(x+W,y+T);     ctx.lineTo(x+W,y+H/2-T); ctx.lineTo(x+W-T,y+H/2-r); ctx.lineTo(x+W-T,y+T+r);   break;
+    case 2: ctx.moveTo(x+W,y+H/2+T); ctx.lineTo(x+W,y+H-T);   ctx.lineTo(x+W-T,y+H-T-r); ctx.lineTo(x+W-T,y+H/2+r); break;
+    case 3: ctx.moveTo(x+T,y+H);     ctx.lineTo(x+W-T,y+H);   ctx.lineTo(x+W-T+r,y+H-T); ctx.lineTo(x+T-r,y+H-T);   break;
+    case 4: ctx.moveTo(x,y+H/2+T);   ctx.lineTo(x,y+H-T);     ctx.lineTo(x+T,y+H-T-r);   ctx.lineTo(x+T,y+H/2+r);   break;
+    case 5: ctx.moveTo(x,y+T);       ctx.lineTo(x,y+H/2-T);   ctx.lineTo(x+T,y+H/2-r);   ctx.lineTo(x+T,y+T+r);     break;
+    case 6:
+      ctx.moveTo(x+T,y+H/2-T/2); ctx.lineTo(x+W-T,y+H/2-T/2);
+      ctx.lineTo(x+W-T+r,y+H/2); ctx.lineTo(x+W-T,y+H/2+T/2);
+      ctx.lineTo(x+T,y+H/2+T/2); ctx.lineTo(x+T-r,y+H/2); break;
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+function generate(){
+  const raw = document.getElementById('secret').value.toUpperCase().replace(/[^A-Z0-9 ]/g,'') || 'HELLO';
+  const mode = document.getElementById('decoy').value;
+  const chars = raw.split('');
+
+  canvas.width  = PAD*2 + chars.length*CW;
+  canvas.height = PAD*2 + CH;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  for(let i=0; i<chars.length; i++){
+    const ch = chars[i];
+    const sx = PAD + i*CW + (CW-SW)/2;
+    const sy = PAD + (CH-SH)/2;
+    const sec = S[ch] || S[' '];
+    const dec = S[pickDecoy(mode, ch)] || S[' '];
+
+    for(let s=0; s<7; s++){
+      if(sec[s]){
+        drawSeg(ctx, sx, sy, s, nonRedColor());
+      } else if(dec[s]){
+        drawSeg(ctx, sx, sy, s, redHeavyColor());
+      }
+    }
+  }
+}
+
+let filterOn = false;
+document.getElementById('genBtn').onclick = generate;
+document.getElementById('filtBtn').onclick = function(){
+  filterOn = !filterOn;
+  this.classList.toggle('on', filterOn);
+  document.getElementById('filterOverlay').classList.toggle('on', filterOn);
+};
+document.getElementById('dlBtn').onclick = ()=>{
+  const a=document.createElement('a');
+  a.download='hidden_message.png'; a.href=canvas.toDataURL(); a.click();
+};
+document.getElementById('secret').oninput = generate;
+document.getElementById('decoy').onchange = generate;
+generate();
+</script>
