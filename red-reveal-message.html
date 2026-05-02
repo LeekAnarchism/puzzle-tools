@@ -208,10 +208,26 @@ function buildSegmentShapes(x, y){
   const middleY = y + MID - T/2;
   const diagInset = 1;
 
-  // Geometry matches the standard 16-segment legend:
-  // a1 a2 at top, b/c right side, d1/d2 at bottom, e/f left side,
-  // g1/g2 equal-length middle bars, h/i upper center stems,
-  // and j/k/l/m the four diagonals.
+  // Standard 16-segment layout used by the source masks, matching
+  // https://raw.githubusercontent.com/dmadison/LED-Segment-ASCII/refs/heads/master/Images/Segment-Labels.png
+  //
+  //      ---A--- ---B---
+  //     | \     |     / |
+  //     H   K   M   N   C
+  //     |     \ | /     |
+  //      ---U--- ---P---
+  //     |     / | \     |
+  //     G   T   S   R   D
+  //     | /     |     \ |
+  //      ---F--- ---E---
+  //
+  // Top: A left, B right
+  // Bottom: F left, E right
+  // Left side: H upper, G lower
+  // Right side: C upper, D lower
+  // Middle bars: U left, P right
+  // Center stems: M upper, S lower
+  // Diagonals: K upper-left, N upper-right, T lower-left, R lower-right
   return {
     A: hSeg(innerLeft, x + SW/2 - GAP/2, top, T),
     B: hSeg(x + SW/2 + GAP/2, innerRight, top, T),
