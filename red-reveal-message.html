@@ -237,14 +237,14 @@ function buildSegmentShapes(x, y){
     F: hSeg(innerLeft, x + SW/2 - GAP/2, bottom - T, T),
     G: vSeg(left, midBottom, bottom - T, T),
     H: vSeg(left, top + T, midTop, T),
-    K: dSeg(innerLeft + diagInset, bottom - T - diagInset, centerLeft + diagInset, midBottom + diagInset, T - 1),
+    K: dSeg(innerLeft + diagInset, top + T + diagInset, centerLeft + diagInset, midTop - diagInset, T - 1),
     M: vSeg(centerStemX, top + T + 2, midTop - 2, T - 1),
     N: dSeg(centerRight - diagInset, midTop - diagInset, innerRight - diagInset, top + T + diagInset, T - 1),
-    P: hSeg(innerLeft, centerLeft, middleY, T),
-    R: dSeg(innerLeft + diagInset, top + T + diagInset, centerLeft + diagInset, midTop - diagInset, T - 1),
+    P: hSeg(centerRight, innerRight, middleY, T),
+    R: dSeg(centerRight - diagInset, midBottom + diagInset, innerRight - diagInset, bottom - T - diagInset, T - 1),
     S: vSeg(centerStemX, midBottom + 2, bottom - T - 2, T - 1),
-    T: dSeg(centerRight - diagInset, midBottom + diagInset, innerRight - diagInset, bottom - T - diagInset, T - 1),
-    U: hSeg(centerRight, innerRight, middleY, T)
+    T: dSeg(innerLeft + diagInset, bottom - T - diagInset, centerLeft + diagInset, midBottom + diagInset, T - 1),
+    U: hSeg(innerLeft, centerLeft, middleY, T)
   };
 }
 
