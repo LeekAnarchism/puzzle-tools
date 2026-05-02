@@ -82,7 +82,7 @@ const CHAR_MASKS = {
   'W': 0x050CC,
   'X': 0x05500,
   'Y': 0x088BC,
-  'Z': 0x04433
+  'Z': 0x04433,
 };
 
 function maskToSegments(mask){
@@ -199,11 +199,20 @@ function buildSegmentShapes(x, y){
   const bottom = y + SH;
   const innerLeft = left + T;
   const innerRight = right - T;
+  const centerX = x + SW / 2;
   const midTop = y + MID - GAP/2;
   const midBottom = y + MID + GAP/2;
-  const centerLeft = x + SW/2 - T - GAP/2;
-  const centerRight = x + SW/2 + GAP/2;
+  const centerLeft = centerX - GAP/2;
+  const centerRight = centerX + GAP/2;
+  const upperStemLeft = centerX - T - GAP/2;
+  const upperStemRight = centerX + GAP/2;
+  const middleY = y + MID - T/2;
+  const diagInset = 1;
 
+  // Geometry matches the standard 16-segment legend:
+  // a1 a2 at top, b/c right side, d1/d2 at bottom, e/f left side,
+  // g1/g2 equal-length middle bars, h/i upper center stems,
+  // and j/k/l/m the four diagonals.
   return {
     A: hSeg(innerLeft, x + SW/2 - GAP/2, top, T),
     B: hSeg(x + SW/2 + GAP/2, innerRight, top, T),
@@ -213,14 +222,14 @@ function buildSegmentShapes(x, y){
     F: hSeg(innerLeft, x + SW/2 - GAP/2, bottom - T, T),
     G: vSeg(left, midBottom, bottom - T, T),
     H: vSeg(left, top + T, midTop, T),
-    K: dSeg(innerLeft + 1, top + T + 1, centerLeft + 1, midTop - 1, T - 1),
-    M: vSeg(x + SW/2 - T - GAP/2, top + T + 2, midTop - 2, T - 1),
-    N: dSeg(centerRight - 1, top + T + 1, innerRight - 1, midTop - 1, T - 1),
-    P: hSeg(innerLeft + 2, centerLeft, y + MID - T/2, T),
-    R: dSeg(centerRight - 1, midBottom + 1, right - T - 1, bottom - T - 1, T - 1),
-    S: vSeg(x + SW/2 + GAP/2, midBottom + 2, bottom - T - 2, T - 1),
-    T: dSeg(left + T + 1, bottom - T - 1, centerLeft + 1, midBottom + 1, T - 1),
-    U: hSeg(centerRight, innerRight - 2, y + MID - T/2, T)
+    K: dSeg(innerLeft + diagInset, bottom - T - diagInset, centerLeft + diagInset, midBottom + diagInset, T - 1),
+    M: vSeg(upperStemLeft, top + T + 2, midTop - 2, T - 1),
+    N: dSeg(centerRight - diagInset, midTop - diagInset, innerRight - diagInset, top + T + diagInset, T - 1),
+    P: hSeg(innerLeft, centerLeft, middleY, T),
+    R: dSeg(innerLeft + diagInset, top + T + diagInset, centerLeft + diagInset, midTop - diagInset, T - 1),
+    S: vSeg(upperStemRight, top + T + 2, midTop - 2, T - 1),
+    T: dSeg(centerRight - diagInset, midBottom + diagInset, innerRight - diagInset, bottom - T - diagInset, T - 1),
+    U: hSeg(centerRight, innerRight, middleY, T)
   };
 }
 
