@@ -10,7 +10,7 @@
   .btn:hover { background: var(--color-background-secondary); }
   .btn.on { background: #cc0000; color: white; border-color: #cc0000; }
   h3 { font-size: 15px; font-weight: 500; margin: 0 0 0.75rem; color: var(--color-text-primary); }
-  .canvas-wrap { position: relative; display: inline-block; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-tertiary); overflow: hidden; }
+  .canvas-wrap { position: relative; display: inline-block; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-tertiary); overflow: hidden; background: #fff; }
   #filterOverlay { display: none; position: absolute; inset: 0; background: hsl(0,100%,50%); mix-blend-mode: multiply; pointer-events: none; }
   #filterOverlay.on { display: block; }
 </style>
@@ -236,8 +236,8 @@ function generate(){
 
   canvas.width  = PAD*2 + chars.length*CW;
   canvas.height = PAD*2 + CH;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // Leave the canvas transparent so downloaded PNGs preserve transparency.
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   for(let i=0; i<chars.length; i++){
     const ch = chars[i];
