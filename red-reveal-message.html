@@ -16,19 +16,19 @@
 </style>
 
 <div class="wrap">
-  <h2 class="sr-only">7-segment hidden message encoder</h2>
+  <h2 class="sr-only">16-segment hidden message encoder</h2>
   <h3>Hidden message encoder</h3>
   <div class="row">
     <div class="field">
       <label>Secret message</label>
       <input type="text" id="secret" value="RED REVEAL" maxlength="16" style="text-transform:uppercase;">
-      <span class="hint">Letters A–Z, 0–9, spaces</span>
+      <span class="hint">Capital letters A–Z and spaces</span>
     </div>
     <div class="field">
       <label>Decoy style</label>
       <select id="decoy">
         <option value="none">No decoy (test mode)</option>
-        <option value="eights">All eights (max fill)</option>
+        <option value="full">Full-segment noise</option>
         <option value="random" selected>Random characters</option>
         <option value="keyboard">Keyboard-row noise</option>
       </select>
@@ -46,78 +46,191 @@
 </div>
 
 <script>
-const S = {
-  '0':[1,1,1,1,1,1,0],'1':[0,1,1,0,0,0,0],'2':[1,1,0,1,1,0,1],
-  '3':[1,1,1,1,0,0,1],'4':[0,1,1,0,0,1,1],'5':[1,0,1,1,0,1,1],
-  '6':[1,0,1,1,1,1,1],'7':[1,1,1,0,0,0,0],'8':[1,1,1,1,1,1,1],
-  '9':[1,1,1,1,0,1,1],
-  'A':[1,1,1,0,1,1,1],'B':[0,0,1,1,1,1,1],'C':[1,0,0,1,1,1,0],
-  'D':[0,1,1,1,1,0,1],'E':[1,0,0,1,1,1,1],'F':[1,0,0,0,1,1,1],
-  'G':[1,0,1,1,1,1,0],'H':[0,1,1,0,1,1,1],'I':[0,0,0,0,0,1,0],
-  'J':[0,1,1,1,1,0,0],'K':[1,0,0,0,1,1,1],'L':[0,0,0,1,1,1,0],
-  'M':[1,1,0,0,1,1,0],'N':[0,0,1,0,1,1,1],'O':[1,1,1,1,1,1,0],
-  'P':[1,1,0,0,1,1,1],'Q':[1,1,1,0,0,1,1],'R':[0,0,0,0,1,1,1],
-  'S':[1,0,1,1,0,1,1],'T':[0,0,0,1,1,1,1],'U':[0,1,1,1,1,1,0],
-  'V':[0,0,1,1,1,0,0],'W':[0,1,1,1,1,1,0],'X':[0,1,1,0,1,1,1],
-  'Y':[0,1,1,1,0,1,1],'Z':[1,1,0,1,1,0,1],' ':[0,0,0,0,0,0,0]
+const SEGMENTS = ['A','B','C','D','E','F','G','H','K','M','N','P','R','S','T','U'];
+const FULL_MASK = SEGMENTS.slice();
+
+// Source-backed uppercase masks from:
+// https://github.com/dmadison/LED-Segment-ASCII
+// File: 16-Segment/16-Segment-ASCII_BIN.txt
+// Bit order in the repo is A, B, C, D, E, F, G, H, K, M, N, P, R, S, T, U, DP.
+const CHAR_MASKS = {
+  ' ': 0x00000,
+  'A': 0x088CF,
+  'B': 0x02A3F,
+  'C': 0x000F3,
+  'D': 0x0223F,
+  'E': 0x080F3,
+  'F': 0x080C3,
+  'G': 0x008FB,
+  'H': 0x088CC,
+  'I': 0x02233,
+  'J': 0x0007C,
+  'K': 0x094C0,
+  'L': 0x000F0,
+  'M': 0x005CC,
+  'N': 0x011CC,
+  'O': 0x000FF,
+  'P': 0x088C7,
+  'Q': 0x010FF,
+  'R': 0x098C7,
+  'S': 0x088BB,
+  'T': 0x02203,
+  'U': 0x000FC,
+  'V': 0x044C0,
+  'W': 0x050CC,
+  'X': 0x05500,
+  'Y': 0x088BC,
+  'Z': 0x04433
 };
 
-const POOL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-const KROWS = ['QWERTYUIOP','ASDFGHJKL','ZXCVBNM'];
-
-// Secret: hues 90–270 (no red component), sat 100%, light 40%
-function nonRedColor() {
-  const hue = 90 + Math.random() * 180;
-  return `hsl(${hue.toFixed(0)},100%,40%)`;
+function maskToSegments(mask){
+  return SEGMENTS.filter((_, i) => mask & (1 << i));
 }
 
-// Decoy: red-heavy hues — wrapping around 0°, covering reds, oranges, pinks, magentas.
-// Hues 300–360 (magenta→red) and 0–45 (red→orange-yellow), sat 100%, light 40%.
-function redHeavyColor() {
-  const hue = Math.random() < 0.5
-    ? 300 + Math.random() * 60   // 300–360: magenta, hot pink, red
-    :       Math.random() * 45;  // 0–45:   red, vermillion, orange
-  return `hsl(${hue.toFixed(0)},100%,40%)`;
+const S = Object.fromEntries(
+  Object.entries(CHAR_MASKS).map(([ch, mask]) => [ch, maskToSegments(mask)])
+);
+
+const POOL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const KROWS = ['QWERTYUIOP','ASDFGHJKL','ZXCVBNM'];
+
+function randInt(min, max){
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function rgbWithMinSum(r, g, b, minSum){
+  let rr = r;
+  let gg = g;
+  let bb = b;
+
+  while (rr + gg + bb < minSum) {
+    if (gg <= bb && gg < 255) gg++;
+    else if (bb < 255) bb++;
+    else if (rr < 255) rr++;
+    else break;
+  }
+
+  return `rgb(${rr},${gg},${bb})`;
+}
+
+// Hidden-message segments must survive the red filter as dark/visible marks.
+// A red filter removes cyan/blue-green light, so colors with R=0 collapse toward
+// black against the red-tinted white background and become readable.
+function hiddenMessageColor() {
+  const g = randInt(80, 255);
+  const b = randInt(80, 255);
+  return rgbWithMinSum(0, g, b, 200);
+}
+
+// Decoy segments should blend into the red-tinted paper when the filter is on.
+// Keeping R high means they stay red after filtering and visually disappear into
+// the background rather than turning dark.
+function decoyCoverColor() {
+  const r = randInt(200, 255);
+  const g = randInt(0, 80);
+  const b = randInt(0, 80);
+  return rgbWithMinSum(r, g, b, 200);
 }
 
 function rnd(a){ return a[Math.floor(Math.random()*a.length)]; }
 
 function pickDecoy(mode, secretChar){
   if(mode==='none')     return ' ';
-  if(mode==='eights')   return '8';
+  if(mode==='full')     return '*';
   if(mode==='keyboard') return rnd(rnd(KROWS));
   let c;
   do { c = POOL[Math.floor(Math.random()*POOL.length)]; } while(c===secretChar);
   return c;
 }
 
-const SW=22, SH=40, T=4, CW=36, CH=56, PAD=10;
+const SW=44, SH=72, T=6, GAP=4, MID=SH/2, CW=56, CH=88, PAD=12;
 
-function drawSeg(ctx, x, y, si, color){
-  const W=SW, H=SH, r=1.5;
+function poly(ctx, pts, color){
   ctx.fillStyle = color;
   ctx.beginPath();
-  switch(si){
-    case 0: ctx.moveTo(x+T,y);       ctx.lineTo(x+W-T,y);     ctx.lineTo(x+W-T+r,y+T);   ctx.lineTo(x+T-r,y+T);     break;
-    case 1: ctx.moveTo(x+W,y+T);     ctx.lineTo(x+W,y+H/2-T); ctx.lineTo(x+W-T,y+H/2-r); ctx.lineTo(x+W-T,y+T+r);   break;
-    case 2: ctx.moveTo(x+W,y+H/2+T); ctx.lineTo(x+W,y+H-T);   ctx.lineTo(x+W-T,y+H-T-r); ctx.lineTo(x+W-T,y+H/2+r); break;
-    case 3: ctx.moveTo(x+T,y+H);     ctx.lineTo(x+W-T,y+H);   ctx.lineTo(x+W-T+r,y+H-T); ctx.lineTo(x+T-r,y+H-T);   break;
-    case 4: ctx.moveTo(x,y+H/2+T);   ctx.lineTo(x,y+H-T);     ctx.lineTo(x+T,y+H-T-r);   ctx.lineTo(x+T,y+H/2+r);   break;
-    case 5: ctx.moveTo(x,y+T);       ctx.lineTo(x,y+H/2-T);   ctx.lineTo(x+T,y+H/2-r);   ctx.lineTo(x+T,y+T+r);     break;
-    case 6:
-      ctx.moveTo(x+T,y+H/2-T/2); ctx.lineTo(x+W-T,y+H/2-T/2);
-      ctx.lineTo(x+W-T+r,y+H/2); ctx.lineTo(x+W-T,y+H/2+T/2);
-      ctx.lineTo(x+T,y+H/2+T/2); ctx.lineTo(x+T-r,y+H/2); break;
-  }
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for(let i=1; i<pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
   ctx.closePath();
   ctx.fill();
+}
+
+function hSeg(x1, x2, y, t){
+  return [
+    [x1+t/2, y],
+    [x2-t/2, y],
+    [x2, y+t/2],
+    [x2-t/2, y+t],
+    [x1+t/2, y+t],
+    [x1, y+t/2]
+  ];
+}
+
+function vSeg(x, y1, y2, t){
+  return [
+    [x, y1+t/2],
+    [x+t/2, y1],
+    [x+t, y1+t/2],
+    [x+t, y2-t/2],
+    [x+t/2, y2],
+    [x, y2-t/2]
+  ];
+}
+
+function dSeg(x1, y1, x2, y2, t){
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.hypot(dx, dy);
+  const px = -dy / len * (t / 2);
+  const py = dx / len * (t / 2);
+  return [
+    [x1 + px, y1 + py],
+    [x1 - px, y1 - py],
+    [x2 - px, y2 - py],
+    [x2 + px, y2 + py]
+  ];
+}
+
+function buildSegmentShapes(x, y){
+  const left = x;
+  const right = x + SW;
+  const top = y;
+  const bottom = y + SH;
+  const innerLeft = left + T;
+  const innerRight = right - T;
+  const midTop = y + MID - GAP/2;
+  const midBottom = y + MID + GAP/2;
+  const centerLeft = x + SW/2 - T - GAP/2;
+  const centerRight = x + SW/2 + GAP/2;
+
+  return {
+    A: hSeg(innerLeft, x + SW/2 - GAP/2, top, T),
+    B: hSeg(x + SW/2 + GAP/2, innerRight, top, T),
+    C: vSeg(right - T, top + T, midTop, T),
+    D: vSeg(right - T, midBottom, bottom - T, T),
+    E: hSeg(x + SW/2 + GAP/2, innerRight, bottom - T, T),
+    F: hSeg(innerLeft, x + SW/2 - GAP/2, bottom - T, T),
+    G: vSeg(left, midBottom, bottom - T, T),
+    H: vSeg(left, top + T, midTop, T),
+    K: dSeg(innerLeft + 1, top + T + 1, centerLeft + 1, midTop - 1, T - 1),
+    M: vSeg(x + SW/2 - T - GAP/2, top + T + 2, midTop - 2, T - 1),
+    N: dSeg(centerRight - 1, top + T + 1, innerRight - 1, midTop - 1, T - 1),
+    P: hSeg(innerLeft + 2, centerLeft, y + MID - T/2, T),
+    R: dSeg(centerRight - 1, midBottom + 1, right - T - 1, bottom - T - 1, T - 1),
+    S: vSeg(x + SW/2 + GAP/2, midBottom + 2, bottom - T - 2, T - 1),
+    T: dSeg(left + T + 1, bottom - T - 1, centerLeft + 1, midBottom + 1, T - 1),
+    U: hSeg(centerRight, innerRight - 2, y + MID - T/2, T)
+  };
+}
+
+function drawSeg(ctx, shapes, segment, color){
+  poly(ctx, shapes[segment], color);
 }
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 function generate(){
-  const raw = document.getElementById('secret').value.toUpperCase().replace(/[^A-Z0-9 ]/g,'') || 'HELLO';
+  const raw = document.getElementById('secret').value.toUpperCase().replace(/[^A-Z ]/g,'') || 'HELLO';
   const mode = document.getElementById('decoy').value;
   const chars = raw.split('');
 
@@ -130,15 +243,22 @@ function generate(){
     const ch = chars[i];
     const sx = PAD + i*CW + (CW-SW)/2;
     const sy = PAD + (CH-SH)/2;
+    const shapes = buildSegmentShapes(sx, sy);
     const sec = S[ch] || S[' '];
-    const dec = S[pickDecoy(mode, ch)] || S[' '];
+    const decoyChar = pickDecoy(mode, ch);
+    const dec = decoyChar === '*' ? FULL_MASK : (S[decoyChar] || S[' ']);
+    const secSet = new Set(sec);
 
-    for(let s=0; s<7; s++){
-      if(sec[s]){
-        drawSeg(ctx, sx, sy, s, nonRedColor());
-      } else if(dec[s]){
-        drawSeg(ctx, sx, sy, s, redHeavyColor());
+    // Draw decoys first so the real message can overwrite any overlapping
+    // segments with the cyan-like "visible through red filter" color.
+    for(const segment of dec){
+      if(!secSet.has(segment)){
+        drawSeg(ctx, shapes, segment, decoyCoverColor());
       }
+    }
+
+    for(const segment of sec){
+      drawSeg(ctx, shapes, segment, hiddenMessageColor());
     }
   }
 }
