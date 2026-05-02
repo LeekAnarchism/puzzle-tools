@@ -5,6 +5,7 @@
   .field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 160px; }
   label { font-size: 13px; color: var(--color-text-secondary); }
   .hint { font-size: 12px; color: var(--color-text-tertiary); margin-top: 2px; }
+  textarea { min-height: 6rem; resize: vertical; }
   .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1rem; }
   .btn { padding: 7px 18px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: transparent; cursor: pointer; font-size: 14px; color: var(--color-text-primary); }
   .btn:hover { background: var(--color-background-secondary); }
@@ -21,8 +22,9 @@
   <div class="row">
     <div class="field">
       <label>Secret message</label>
-      <input type="text" id="secret" value="RED REVEAL" maxlength="16" style="text-transform:uppercase;">
-      <span class="hint">Capital letters A–Z and spaces</span>
+      <textarea id="secret" rows="4" maxlength="160" style="text-transform:uppercase;">RED
+REVEAL</textarea>
+      <span class="hint">Capital letters A–Z, spaces, and line breaks</span>
     </div>
     <div class="field">
       <label>Decoy style</label>
@@ -143,7 +145,7 @@ function pickDecoy(mode, secretChar){
   return c;
 }
 
-const SW=44, SH=72, T=6, GAP=4, MID=SH/2, CW=56, CH=88, PAD=12;
+const SW=44, SH=72, T=6, GAP=4, MID=SH/2, CW=56, CH=88, PAD=12, ROW_GAP=16;
 
 function poly(ctx, pts, color){
   ctx.fillStyle = color;
@@ -230,35 +232,42 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 function generate(){
-  const raw = document.getElementById('secret').value.toUpperCase().replace(/[^A-Z ]/g,'') || 'HELLO';
+  const raw = document.getElementById('secret').value.toUpperCase().replace(/[^A-Z \n]/g,'') || 'HELLO';
   const mode = document.getElementById('decoy').value;
-  const chars = raw.split('');
+  const lines = raw.split('\n');
+  const visibleLines = lines.length ? lines : ['HELLO'];
+  const maxCols = Math.max(1, ...visibleLines.map(line => line.length));
 
-  canvas.width  = PAD*2 + chars.length*CW;
-  canvas.height = PAD*2 + CH;
+  canvas.width  = PAD*2 + maxCols * CW;
+  canvas.height = PAD*2 + visibleLines.length * CH + Math.max(0, visibleLines.length - 1) * ROW_GAP;
   // Leave the canvas transparent so downloaded PNGs preserve transparency.
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  for(let i=0; i<chars.length; i++){
-    const ch = chars[i];
-    const sx = PAD + i*CW + (CW-SW)/2;
-    const sy = PAD + (CH-SH)/2;
-    const shapes = buildSegmentShapes(sx, sy);
-    const sec = S[ch] || S[' '];
-    const decoyChar = pickDecoy(mode, ch);
-    const dec = decoyChar === '*' ? FULL_MASK : (S[decoyChar] || S[' ']);
-    const secSet = new Set(sec);
+  for(let row = 0; row < visibleLines.length; row++){
+    const chars = visibleLines[row].split('');
+    const rowTop = PAD + row * (CH + ROW_GAP);
 
-    // Draw decoys first so the real message can overwrite any overlapping
-    // segments with the cyan-like "visible through red filter" color.
-    for(const segment of dec){
-      if(!secSet.has(segment)){
-        drawSeg(ctx, shapes, segment, decoyCoverColor());
+    for(let i=0; i<chars.length; i++){
+      const ch = chars[i];
+      const sx = PAD + i*CW + (CW-SW)/2;
+      const sy = rowTop + (CH-SH)/2;
+      const shapes = buildSegmentShapes(sx, sy);
+      const sec = S[ch] || S[' '];
+      const decoyChar = pickDecoy(mode, ch);
+      const dec = decoyChar === '*' ? FULL_MASK : (S[decoyChar] || S[' ']);
+      const secSet = new Set(sec);
+
+      // Draw decoys first so the real message can overwrite any overlapping
+      // segments with the cyan-like "visible through red filter" color.
+      for(const segment of dec){
+        if(!secSet.has(segment)){
+          drawSeg(ctx, shapes, segment, decoyCoverColor());
+        }
       }
-    }
 
-    for(const segment of sec){
-      drawSeg(ctx, shapes, segment, hiddenMessageColor());
+      for(const segment of sec){
+        drawSeg(ctx, shapes, segment, hiddenMessageColor());
+      }
     }
   }
 }
