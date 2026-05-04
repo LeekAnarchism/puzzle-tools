@@ -81,6 +81,7 @@ ASCII 16-seg: ?!@#$%
 </div>
 
 <script>
+const STORAGE_KEY_MESSAGE = 'red-reveal-message.secret';
 const SEGMENTS = ['A','B','C','D','E','F','G','H','K','M','N','P','R','S','T','U'];
 const FULL_MASK = SEGMENTS.slice();
 
@@ -315,9 +316,27 @@ function drawSeg(ctx, shapes, segment, color){
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
+const secretInput = document.getElementById('secret');
+
+function loadStoredMessage(){
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY_MESSAGE);
+    if (stored !== null) secretInput.value = stored;
+  } catch (err) {
+    // Ignore storage failures so the tool still works in restricted contexts.
+  }
+}
+
+function storeMessage(){
+  try {
+    localStorage.setItem(STORAGE_KEY_MESSAGE, secretInput.value);
+  } catch (err) {
+    // Ignore storage failures so the tool still works in restricted contexts.
+  }
+}
 
 function generate(){
-  const rawInput = document.getElementById('secret').value.replace(/\r\n?/g, '\n');
+  const rawInput = secretInput.value.replace(/\r\n?/g, '\n');
   const raw = isCapsOnlyMode()
     ? rawInput.toUpperCase().replace(/[^A-Z \n]/g,'')
     : rawInput.replace(/[^\x20-\x7E\n]/g,'');
@@ -372,7 +391,10 @@ document.getElementById('dlBtn').onclick = ()=>{
   const a=document.createElement('a');
   a.download='hidden_message.png'; a.href=canvas.toDataURL(); a.click();
 };
-document.getElementById('secret').oninput = generate;
+secretInput.oninput = ()=>{
+  storeMessage();
+  generate();
+};
 document.getElementById('decoy').onchange = generate;
 document.getElementById('charHeight').oninput = generate;
 document.getElementById('charWidth').oninput = generate;
@@ -380,5 +402,6 @@ document.getElementById('hSpacing').oninput = generate;
 document.getElementById('vSpacing').oninput = generate;
 document.getElementById('lineThickness').oninput = generate;
 document.getElementById('capsOnly').onchange = generate;
+loadStoredMessage();
 generate();
 </script>
