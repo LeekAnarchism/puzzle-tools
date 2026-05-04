@@ -402,11 +402,12 @@ function getOverrideSegments(matrix, row, col){
 
 function setOverrideSegments(row, col, segments){
   const matrix = getOverrideMatrix();
+  const rowCount = Math.max(1, lastRenderState.rowCount || 1);
+  const colCount = Math.max(1, lastRenderState.colCount || 1);
+  if (row >= rowCount || col >= colCount) return;
   while (matrix.length <= row) matrix.push([]);
   while (matrix[row].length <= col) matrix[row].push('');
   matrix[row][col] = normalizeOverrideCell(segments.join(''));
-  const rowCount = Math.max(matrix.length, lastRenderState.rowCount || 0);
-  const colCount = Math.max((lastRenderState.colCount || 0), col + 1);
   overridesInput.value = serializeOverrides(matrix, rowCount, colCount);
   storeOverrides();
 }
@@ -447,12 +448,8 @@ function generate(){
   const metrics = getMetrics();
   const lines = (raw || 'HELLO').split('\n');
   const overrideMatrix = getOverrideMatrix();
-  const rowCount = Math.max(1, lines.length, overrideMatrix.length);
-  const maxCols = Math.max(
-    1,
-    ...lines.map(line => line.length),
-    ...overrideMatrix.map(row => row.length)
-  );
+  const rowCount = Math.max(1, lines.length);
+  const maxCols = Math.max(1, ...lines.map(line => line.length));
   syncOverridesTextbox(rowCount, maxCols);
 
   canvas.width  = PAD * 2 + maxCols * metrics.width + Math.max(0, maxCols - 1) * metrics.hSpacing;
