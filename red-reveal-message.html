@@ -9,7 +9,7 @@
   label { font-size: 13px; color: var(--color-text-secondary); }
   .check-label { display: flex; align-items: center; gap: 8px; }
   .hint { font-size: 12px; color: var(--color-text-tertiary); margin-top: 2px; }
-  textarea { min-height: 6rem; resize: vertical; }
+  textarea { min-height: 6rem; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
   .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1rem; }
   .btn { padding: 7px 18px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: transparent; cursor: pointer; font-size: 14px; color: var(--color-text-primary); }
   .btn:hover { background: var(--color-background-secondary); }
@@ -98,6 +98,7 @@ const STORAGE_KEY_MESSAGE = 'red-reveal-message.secret';
 const STORAGE_KEY_OVERRIDES = 'red-reveal-message.overrides';
 const SEGMENTS = ['A','B','C','D','E','F','G','H','K','M','N','P','R','S','T','U'];
 const FULL_MASK = SEGMENTS.slice();
+const BLANK_CHAR = ' ';
 
 // Source-backed printable ASCII masks from:
 // https://github.com/dmadison/LED-Segment-ASCII
@@ -439,8 +440,8 @@ function pointInPolygon(x, y, points){
 function generate(){
   const rawInput = secretInput.value.replace(/\r\n?/g, '\n');
   const raw = isCapsOnlyMode()
-    ? rawInput.toUpperCase().replace(/[^A-Z \n]/g,'')
-    : rawInput.replace(/[^\x20-\x7E\n]/g,'');
+    ? rawInput.toUpperCase().replace(/\./g, BLANK_CHAR).replace(/[^A-Z \n]/g,'')
+    : rawInput.replace(/\./g, BLANK_CHAR).replace(/[^\x20-\x7E\n]/g,'');
   const mode = document.getElementById('decoy').value;
   const metrics = getMetrics();
   const lines = (raw || 'HELLO').split('\n');
@@ -464,14 +465,14 @@ function generate(){
     lastRenderState.cells[row] = [];
 
     for(let i=0; i<maxCols; i++){
-      const ch = chars[i] || ' ';
+      const ch = chars[i] || BLANK_CHAR;
       const sx = PAD + i * metrics.cellWidth;
       const sy = rowTop;
       const shapes = buildSegmentShapes(sx, sy);
-      const sec = S[ch] || S[' '];
+      const sec = S[ch] || S[BLANK_CHAR];
       const overrideSegments = getOverrideSegments(overrideMatrix, row, i);
       const decoyChar = pickDecoy(mode, ch);
-      const dec = decoyChar === '*' ? FULL_MASK : (S[decoyChar] || S[' ']);
+      const dec = decoyChar === '*' ? FULL_MASK : (S[decoyChar] || S[BLANK_CHAR]);
       const visibleSet = new Set([...sec, ...overrideSegments]);
       lastRenderState.cells[row][i] = { x: sx, y: sy, shapes };
 
