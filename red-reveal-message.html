@@ -4,7 +4,9 @@
   .row { display: flex; gap: 12px; margin-bottom: 1rem; flex-wrap: wrap; align-items: flex-end; }
   .field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 160px; }
   .field.compact { flex: 0 1 140px; min-width: 120px; }
+  .field.checkbox { flex: 0 1 180px; min-width: 160px; justify-content: flex-end; }
   label { font-size: 13px; color: var(--color-text-secondary); }
+  .check-label { display: flex; align-items: center; gap: 8px; }
   .hint { font-size: 12px; color: var(--color-text-tertiary); margin-top: 2px; }
   textarea { min-height: 6rem; resize: vertical; }
   .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1rem; }
@@ -56,6 +58,16 @@ ASCII 16-seg: ?!@#$%
       <label for="vSpacing">Vertical spacing (pixels)</label>
       <input type="number" id="vSpacing" min="0" max="120" step="1" value="16">
     </div>
+    <div class="field compact">
+      <label for="lineThickness">Line thickness (pixels)</label>
+      <input type="number" id="lineThickness" min="2" max="48" step="1" value="6">
+    </div>
+    <div class="field checkbox">
+      <label class="check-label" for="capsOnly">
+        <input type="checkbox" id="capsOnly">
+        <span>Caps only mode</span>
+      </label>
+    </div>
   </div>
   <div class="controls">
     <button class="btn" id="genBtn">Generate</button>
@@ -105,6 +117,7 @@ const S = Object.fromEntries(
 );
 
 const POOL = Object.keys(CHAR_MASKS).filter(ch => ch !== ' ');
+const CAPS_POOL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 const KROWS = ['QWERTYUIOP','ASDFGHJKL','ZXCVBNM'];
 
 function randInt(min, max){
@@ -147,12 +160,21 @@ function decoyCoverColor() {
 
 function rnd(a){ return a[Math.floor(Math.random()*a.length)]; }
 
+function isCapsOnlyMode(){
+  return document.getElementById('capsOnly').checked;
+}
+
+function getDecoyPool(){
+  return isCapsOnlyMode() ? CAPS_POOL : POOL;
+}
+
 function pickDecoy(mode, secretChar){
   if(mode==='none')     return ' ';
   if(mode==='full')     return '*';
   if(mode==='keyboard') return rnd(rnd(KROWS));
+  const pool = getDecoyPool();
   let c;
-  do { c = rnd(POOL); } while(c===secretChar);
+  do { c = rnd(pool); } while(c===secretChar && pool.length > 1);
   return c;
 }
 
@@ -169,10 +191,10 @@ function getMetrics(){
   const height = clampNumber(document.getElementById('charHeight').value, 24, 240, 72);
   const hSpacing = clampNumber(document.getElementById('hSpacing').value, 0, 120, 12);
   const vSpacing = clampNumber(document.getElementById('vSpacing').value, 0, 120, 16);
+  const thickness = clampNumber(document.getElementById('lineThickness').value, 2, 48, 6);
 
   // Keep segment thickness and internal gaps proportional so the glyph layout
   // stays stable as the user changes width and height independently.
-  const thickness = Math.max(2, Math.round(Math.min(width, height) * 0.14));
   const centerGap = Math.max(2, Math.round(thickness * 0.67));
   const cellWidth = width + hSpacing;
   const cellHeight = height + vSpacing;
@@ -296,10 +318,12 @@ const ctx = canvas.getContext('2d');
 
 function generate(){
   const rawInput = document.getElementById('secret').value.replace(/\r\n?/g, '\n');
-  const raw = rawInput.replace(/[^\x20-\x7E\n]/g,'') || 'HELLO';
+  const raw = isCapsOnlyMode()
+    ? rawInput.toUpperCase().replace(/[^A-Z \n]/g,'')
+    : rawInput.replace(/[^\x20-\x7E\n]/g,'');
   const mode = document.getElementById('decoy').value;
   const metrics = getMetrics();
-  const lines = raw.split('\n');
+  const lines = (raw || 'HELLO').split('\n');
   const visibleLines = lines.length ? lines : ['HELLO'];
   const maxCols = Math.max(1, ...visibleLines.map(line => line.length));
 
@@ -354,5 +378,7 @@ document.getElementById('charHeight').oninput = generate;
 document.getElementById('charWidth').oninput = generate;
 document.getElementById('hSpacing').oninput = generate;
 document.getElementById('vSpacing').oninput = generate;
+document.getElementById('lineThickness').oninput = generate;
+document.getElementById('capsOnly').onchange = generate;
 generate();
 </script>
