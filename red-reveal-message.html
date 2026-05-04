@@ -3,6 +3,7 @@
   .wrap { padding: 1.5rem 0; font-family: var(--font-sans); }
   .row { display: flex; gap: 12px; margin-bottom: 1rem; flex-wrap: wrap; align-items: flex-end; }
   .field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 160px; }
+  .field.compact { flex: 0 1 140px; min-width: 120px; }
   label { font-size: 13px; color: var(--color-text-secondary); }
   .hint { font-size: 12px; color: var(--color-text-tertiary); margin-top: 2px; }
   textarea { min-height: 6rem; resize: vertical; }
@@ -22,12 +23,11 @@
   <div class="row">
     <div class="field">
       <label>Secret message</label>
-      <textarea id="secret" rows="4" maxlength="160" style="text-transform:uppercase;">ABCDEFG
-HIJKLMN
-OPQRSTU
-VWXYZ
+      <textarea id="secret" rows="4" maxlength="160">Hello, World!
+0123456789
+ASCII 16-seg: ?!@#$%
 </textarea>
-      <span class="hint">Capital letters A-Z, spaces, and line breaks</span>
+      <span class="hint">Printable ASCII characters plus line breaks</span>
     </div>
     <div class="field">
       <label>Decoy style</label>
@@ -37,6 +37,24 @@ VWXYZ
         <option value="random" selected>Random characters</option>
         <option value="keyboard">Keyboard-row noise</option>
       </select>
+    </div>
+  </div>
+  <div class="row">
+    <div class="field compact">
+      <label for="charHeight">Height (pixels)</label>
+      <input type="number" id="charHeight" min="24" max="240" step="1" value="72">
+    </div>
+    <div class="field compact">
+      <label for="charWidth">Width (pixels)</label>
+      <input type="number" id="charWidth" min="16" max="200" step="1" value="44">
+    </div>
+    <div class="field compact">
+      <label for="hSpacing">Horizontal spacing (pixels)</label>
+      <input type="number" id="hSpacing" min="0" max="120" step="1" value="12">
+    </div>
+    <div class="field compact">
+      <label for="vSpacing">Vertical spacing (pixels)</label>
+      <input type="number" id="vSpacing" min="0" max="120" step="1" value="16">
     </div>
   </div>
   <div class="controls">
@@ -54,39 +72,29 @@ VWXYZ
 const SEGMENTS = ['A','B','C','D','E','F','G','H','K','M','N','P','R','S','T','U'];
 const FULL_MASK = SEGMENTS.slice();
 
-// Source-backed uppercase masks from:
+// Source-backed printable ASCII masks from:
 // https://github.com/dmadison/LED-Segment-ASCII
-// File: 16-Segment/16-Segment-ASCII_BIN.txt
+// File: 16-Segment/16-Segment-ASCII_HEX.txt
 // Bit order in the repo is A, B, C, D, E, F, G, H, K, M, N, P, R, S, T, U, DP.
-const CHAR_MASKS = {
-  ' ': 0x00000,
-  'A': 0x088CF,
-  'B': 0x02A3F,
-  'C': 0x000F3,
-  'D': 0x0223F,
-  'E': 0x080F3,
-  'F': 0x080C3,
-  'G': 0x008FB,
-  'H': 0x088CC,
-  'I': 0x02233,
-  'J': 0x0007C,
-  'K': 0x094C0,
-  'L': 0x000F0,
-  'M': 0x005CC,
-  'N': 0x011CC,
-  'O': 0x000FF,
-  'P': 0x088C7,
-  'Q': 0x010FF,
-  'R': 0x098C7,
-  'S': 0x088BB,
-  'T': 0x02203,
-  'U': 0x000FC,
-  'V': 0x044C0,
-  'W': 0x050CC,
-  'X': 0x05500,
-  'Y': 0x088BC,
-  'Z': 0x04433,
-};
+const ASCII_START = 32;
+const ASCII_MASKS = [
+  0x00000, 0x1000C, 0x00204, 0x0AA3C, 0x0AABB, 0x0EE99, 0x09371, 0x00200,
+  0x01400, 0x04100, 0x0FF00, 0x0AA00, 0x04000, 0x08800, 0x10000, 0x04400,
+  0x044FF, 0x0040C, 0x08877, 0x0083F, 0x0888C, 0x090B3, 0x088FB, 0x0000F,
+  0x088FF, 0x088BF, 0x02200, 0x04200, 0x09400, 0x08830, 0x04900, 0x12807,
+  0x00AF7, 0x088CF, 0x02A3F, 0x000F3, 0x0223F, 0x080F3, 0x080C3, 0x008FB,
+  0x088CC, 0x02233, 0x0007C, 0x094C0, 0x000F0, 0x005CC, 0x011CC, 0x000FF,
+  0x088C7, 0x010FF, 0x098C7, 0x088BB, 0x02203, 0x000FC, 0x044C0, 0x050CC,
+  0x05500, 0x088BC, 0x04433, 0x02212, 0x01100, 0x02221, 0x05000, 0x00030,
+  0x00100, 0x0A070, 0x0A0E0, 0x08060, 0x0281C, 0x0C060, 0x0AA02, 0x0A2A1,
+  0x0A0C0, 0x02000, 0x02260, 0x03600, 0x000C0, 0x0A848, 0x0A040, 0x0A060,
+  0x082C1, 0x0A281, 0x08040, 0x0A0A1, 0x080E0, 0x02060, 0x04040, 0x05048,
+  0x05500, 0x00A1C, 0x0C020, 0x0A212, 0x02200, 0x02A21, 0x0CC00, 0x00000
+];
+
+const CHAR_MASKS = Object.fromEntries(
+  ASCII_MASKS.map((mask, index) => [String.fromCharCode(ASCII_START + index), mask])
+);
 
 function maskToSegments(mask){
   return SEGMENTS.filter((_, i) => mask & (1 << i));
@@ -96,7 +104,7 @@ const S = Object.fromEntries(
   Object.entries(CHAR_MASKS).map(([ch, mask]) => [ch, maskToSegments(mask)])
 );
 
-const POOL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const POOL = Object.keys(CHAR_MASKS).filter(ch => ch !== ' ');
 const KROWS = ['QWERTYUIOP','ASDFGHJKL','ZXCVBNM'];
 
 function randInt(min, max){
@@ -144,11 +152,33 @@ function pickDecoy(mode, secretChar){
   if(mode==='full')     return '*';
   if(mode==='keyboard') return rnd(rnd(KROWS));
   let c;
-  do { c = POOL[Math.floor(Math.random()*POOL.length)]; } while(c===secretChar);
+  do { c = rnd(POOL); } while(c===secretChar);
   return c;
 }
 
-const SW=44, SH=72, T=6, GAP=4, MID=SH/2, CW=56, CH=88, PAD=12, ROW_GAP=16;
+const PAD = 12;
+
+function clampNumber(value, min, max, fallback){
+  const num = Number.parseInt(value, 10);
+  if (Number.isNaN(num)) return fallback;
+  return Math.min(max, Math.max(min, num));
+}
+
+function getMetrics(){
+  const width = clampNumber(document.getElementById('charWidth').value, 16, 200, 44);
+  const height = clampNumber(document.getElementById('charHeight').value, 24, 240, 72);
+  const hSpacing = clampNumber(document.getElementById('hSpacing').value, 0, 120, 12);
+  const vSpacing = clampNumber(document.getElementById('vSpacing').value, 0, 120, 16);
+
+  // Keep segment thickness and internal gaps proportional so the glyph layout
+  // stays stable as the user changes width and height independently.
+  const thickness = Math.max(2, Math.round(Math.min(width, height) * 0.14));
+  const centerGap = Math.max(2, Math.round(thickness * 0.67));
+  const cellWidth = width + hSpacing;
+  const cellHeight = height + vSpacing;
+
+  return { width, height, hSpacing, vSpacing, thickness, centerGap, cellWidth, cellHeight };
+}
 
 function poly(ctx, pts, color){
   ctx.fillStyle = color;
@@ -196,6 +226,12 @@ function dSeg(x1, y1, x2, y2, t){
 }
 
 function buildSegmentShapes(x, y){
+  const metrics = getMetrics();
+  const SW = metrics.width;
+  const SH = metrics.height;
+  const T = metrics.thickness;
+  const GAP = metrics.centerGap;
+  const MID = SH / 2;
   const left = x;
   const right = x + SW;
   const top = y;
@@ -259,25 +295,27 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 function generate(){
-  const raw = document.getElementById('secret').value.toUpperCase().replace(/[^A-Z \n]/g,'') || 'HELLO';
+  const rawInput = document.getElementById('secret').value.replace(/\r\n?/g, '\n');
+  const raw = rawInput.replace(/[^\x20-\x7E\n]/g,'') || 'HELLO';
   const mode = document.getElementById('decoy').value;
+  const metrics = getMetrics();
   const lines = raw.split('\n');
   const visibleLines = lines.length ? lines : ['HELLO'];
   const maxCols = Math.max(1, ...visibleLines.map(line => line.length));
 
-  canvas.width  = PAD*2 + maxCols * CW;
-  canvas.height = PAD*2 + visibleLines.length * CH + Math.max(0, visibleLines.length - 1) * ROW_GAP;
+  canvas.width  = PAD * 2 + maxCols * metrics.width + Math.max(0, maxCols - 1) * metrics.hSpacing;
+  canvas.height = PAD * 2 + visibleLines.length * metrics.height + Math.max(0, visibleLines.length - 1) * metrics.vSpacing;
   // Leave the canvas transparent so downloaded PNGs preserve transparency.
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   for(let row = 0; row < visibleLines.length; row++){
     const chars = visibleLines[row].split('');
-    const rowTop = PAD + row * (CH + ROW_GAP);
+    const rowTop = PAD + row * metrics.cellHeight;
 
     for(let i=0; i<chars.length; i++){
       const ch = chars[i];
-      const sx = PAD + i*CW + (CW-SW)/2;
-      const sy = rowTop + (CH-SH)/2;
+      const sx = PAD + i * metrics.cellWidth;
+      const sy = rowTop;
       const shapes = buildSegmentShapes(sx, sy);
       const sec = S[ch] || S[' '];
       const decoyChar = pickDecoy(mode, ch);
@@ -312,5 +350,9 @@ document.getElementById('dlBtn').onclick = ()=>{
 };
 document.getElementById('secret').oninput = generate;
 document.getElementById('decoy').onchange = generate;
+document.getElementById('charHeight').oninput = generate;
+document.getElementById('charWidth').oninput = generate;
+document.getElementById('hSpacing').oninput = generate;
+document.getElementById('vSpacing').oninput = generate;
 generate();
 </script>
