@@ -5,6 +5,7 @@
   .field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 160px; }
   .field.compact { flex: 0 1 140px; min-width: 120px; }
   .field.checkbox { flex: 0 1 180px; min-width: 160px; justify-content: flex-end; }
+  .field.overrides { flex-basis: 100%; }
   label { font-size: 13px; color: var(--color-text-secondary); }
   .check-label { display: flex; align-items: center; gap: 8px; }
   .hint { font-size: 12px; color: var(--color-text-tertiary); margin-top: 2px; }
@@ -40,6 +41,12 @@ ASCII 16-seg: ?!@#$%
         <option value="keyboard">Keyboard-row noise</option>
       </select>
     </div>
+    <div class="field overrides">
+      <label>Overrides</label>
+      <textarea id="overrides" rows="4" spellcheck="false" placeholder="AB,,BC,,,,
+,U,,,,,"></textarea>
+      <span class="hint">Comma-separated cells and newline-separated rows. Click segments in override mode to edit visually.</span>
+    </div>
   </div>
   <div class="row">
     <div class="field compact">
@@ -68,6 +75,12 @@ ASCII 16-seg: ?!@#$%
         <span>Caps only mode</span>
       </label>
     </div>
+    <div class="field checkbox">
+      <label class="check-label" for="overrideMode">
+        <input type="checkbox" id="overrideMode">
+        <span>Override click mode</span>
+      </label>
+    </div>
   </div>
   <div class="controls">
     <button class="btn" id="genBtn">Generate</button>
@@ -82,6 +95,7 @@ ASCII 16-seg: ?!@#$%
 
 <script>
 const STORAGE_KEY_MESSAGE = 'red-reveal-message.secret';
+const STORAGE_KEY_OVERRIDES = 'red-reveal-message.overrides';
 const SEGMENTS = ['A','B','C','D','E','F','G','H','K','M','N','P','R','S','T','U'];
 const FULL_MASK = SEGMENTS.slice();
 
@@ -317,11 +331,22 @@ function drawSeg(ctx, shapes, segment, color){
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const secretInput = document.getElementById('secret');
+const overridesInput = document.getElementById('overrides');
+let lastRenderState = { cells: [] };
 
 function loadStoredMessage(){
   try {
     const stored = localStorage.getItem(STORAGE_KEY_MESSAGE);
     if (stored !== null) secretInput.value = stored;
+  } catch (err) {
+    // Ignore storage failures so the tool still works in restricted contexts.
+  }
+}
+
+function loadStoredOverrides(){
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY_OVERRIDES);
+    if (stored !== null) overridesInput.value = stored;
   } catch (err) {
     // Ignore storage failures so the tool still works in restricted contexts.
   }
@@ -335,6 +360,82 @@ function storeMessage(){
   }
 }
 
+function storeOverrides(){
+  try {
+    localStorage.setItem(STORAGE_KEY_OVERRIDES, overridesInput.value);
+  } catch (err) {
+    // Ignore storage failures so the tool still works in restricted contexts.
+  }
+}
+
+function normalizeOverrideCell(text){
+  const set = new Set((text || '').toUpperCase().split('').filter(ch => SEGMENTS.includes(ch)));
+  return SEGMENTS.filter(segment => set.has(segment)).join('');
+}
+
+function parseOverridesText(text){
+  return (text || '').replace(/\r\n?/g, '\n').split('\n').map(
+    row => row.split(',').map(cell => normalizeOverrideCell(cell))
+  );
+}
+
+function serializeOverrides(matrix){
+  let lastNonEmptyRow = -1;
+
+  for(let row = 0; row < matrix.length; row++){
+    if (matrix[row].some(cell => cell)) lastNonEmptyRow = row;
+  }
+
+  if (lastNonEmptyRow === -1) return '';
+
+  const rows = [];
+  for(let row = 0; row <= lastNonEmptyRow; row++){
+    const cells = (matrix[row] || []).slice();
+    let lastNonEmptyCol = -1;
+    for(let col = 0; col < cells.length; col++){
+      if (cells[col]) lastNonEmptyCol = col;
+    }
+    rows.push(cells.slice(0, lastNonEmptyCol + 1).join(','));
+  }
+
+  return rows.join('\n');
+}
+
+function getOverrideMatrix(){
+  return parseOverridesText(overridesInput.value);
+}
+
+function getOverrideSegments(matrix, row, col){
+  return ((matrix[row] || [])[col] || '').split('').filter(Boolean);
+}
+
+function setOverrideSegments(row, col, segments){
+  const matrix = getOverrideMatrix();
+  while (matrix.length <= row) matrix.push([]);
+  while (matrix[row].length <= col) matrix[row].push('');
+  matrix[row][col] = normalizeOverrideCell(segments.join(''));
+  overridesInput.value = serializeOverrides(matrix);
+  storeOverrides();
+}
+
+function isOverrideMode(){
+  return document.getElementById('overrideMode').checked;
+}
+
+function pointInPolygon(x, y, points){
+  let inside = false;
+  for(let i = 0, j = points.length - 1; i < points.length; j = i++){
+    const xi = points[i][0];
+    const yi = points[i][1];
+    const xj = points[j][0];
+    const yj = points[j][1];
+    const intersects = ((yi > y) !== (yj > y))
+      && (x < (xj - xi) * (y - yi) / ((yj - yi) || Number.EPSILON) + xi);
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
 function generate(){
   const rawInput = secretInput.value.replace(/\r\n?/g, '\n');
   const raw = isCapsOnlyMode()
@@ -343,37 +444,46 @@ function generate(){
   const mode = document.getElementById('decoy').value;
   const metrics = getMetrics();
   const lines = (raw || 'HELLO').split('\n');
-  const visibleLines = lines.length ? lines : ['HELLO'];
-  const maxCols = Math.max(1, ...visibleLines.map(line => line.length));
+  const overrideMatrix = getOverrideMatrix();
+  const rowCount = Math.max(1, lines.length, overrideMatrix.length);
+  const maxCols = Math.max(
+    1,
+    ...lines.map(line => line.length),
+    ...overrideMatrix.map(row => row.length)
+  );
 
   canvas.width  = PAD * 2 + maxCols * metrics.width + Math.max(0, maxCols - 1) * metrics.hSpacing;
-  canvas.height = PAD * 2 + visibleLines.length * metrics.height + Math.max(0, visibleLines.length - 1) * metrics.vSpacing;
+  canvas.height = PAD * 2 + rowCount * metrics.height + Math.max(0, rowCount - 1) * metrics.vSpacing;
   // Leave the canvas transparent so downloaded PNGs preserve transparency.
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  lastRenderState = { cells: [], rowCount, colCount: maxCols };
 
-  for(let row = 0; row < visibleLines.length; row++){
-    const chars = visibleLines[row].split('');
+  for(let row = 0; row < rowCount; row++){
+    const chars = (lines[row] || '').split('');
     const rowTop = PAD + row * metrics.cellHeight;
+    lastRenderState.cells[row] = [];
 
-    for(let i=0; i<chars.length; i++){
-      const ch = chars[i];
+    for(let i=0; i<maxCols; i++){
+      const ch = chars[i] || ' ';
       const sx = PAD + i * metrics.cellWidth;
       const sy = rowTop;
       const shapes = buildSegmentShapes(sx, sy);
       const sec = S[ch] || S[' '];
+      const overrideSegments = getOverrideSegments(overrideMatrix, row, i);
       const decoyChar = pickDecoy(mode, ch);
       const dec = decoyChar === '*' ? FULL_MASK : (S[decoyChar] || S[' ']);
-      const secSet = new Set(sec);
+      const visibleSet = new Set([...sec, ...overrideSegments]);
+      lastRenderState.cells[row][i] = { x: sx, y: sy, shapes };
 
       // Draw decoys first so the real message can overwrite any overlapping
       // segments with the cyan-like "visible through red filter" color.
       for(const segment of dec){
-        if(!secSet.has(segment)){
+        if(!visibleSet.has(segment)){
           drawSeg(ctx, shapes, segment, decoyCoverColor());
         }
       }
 
-      for(const segment of sec){
+      for(const segment of visibleSet){
         drawSeg(ctx, shapes, segment, hiddenMessageColor());
       }
     }
@@ -395,6 +505,10 @@ secretInput.oninput = ()=>{
   storeMessage();
   generate();
 };
+overridesInput.oninput = ()=>{
+  storeOverrides();
+  generate();
+};
 document.getElementById('decoy').onchange = generate;
 document.getElementById('charHeight').oninput = generate;
 document.getElementById('charWidth').oninput = generate;
@@ -402,6 +516,38 @@ document.getElementById('hSpacing').oninput = generate;
 document.getElementById('vSpacing').oninput = generate;
 document.getElementById('lineThickness').oninput = generate;
 document.getElementById('capsOnly').onchange = generate;
+document.getElementById('overrideMode').onchange = ()=>{
+  canvas.style.cursor = isOverrideMode() ? 'crosshair' : 'default';
+};
+canvas.onclick = (event)=>{
+  if (!isOverrideMode()) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = (event.clientX - rect.left) * scaleX;
+  const y = (event.clientY - rect.top) * scaleY;
+
+  for(let row = 0; row < lastRenderState.cells.length; row++){
+    for(let col = 0; col < lastRenderState.cells[row].length; col++){
+      const cell = lastRenderState.cells[row][col];
+      if (!cell) continue;
+
+      for(const segment of SEGMENTS){
+        if (pointInPolygon(x, y, cell.shapes[segment])) {
+          const current = new Set(getOverrideSegments(getOverrideMatrix(), row, col));
+          if (current.has(segment)) current.delete(segment);
+          else current.add(segment);
+          setOverrideSegments(row, col, [...current]);
+          generate();
+          return;
+        }
+      }
+    }
+  }
+};
 loadStoredMessage();
+loadStoredOverrides();
+canvas.style.cursor = isOverrideMode() ? 'crosshair' : 'default';
 generate();
 </script>
