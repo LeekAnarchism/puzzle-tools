@@ -3,6 +3,7 @@
   .row { display: flex; gap: 12px; margin-bottom: 0.75rem; flex-wrap: wrap; align-items: flex-end; }
   .field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 160px; }
   .field.compact { flex: 0 1 140px; min-width: 120px; }
+  .field.grid-state { min-width: 220px; }
   label { font-size: 13px; color: var(--color-text-secondary); }
   .hint { font-size: 12px; color: var(--color-text-tertiary); margin-top: 2px; }
   textarea {
@@ -11,6 +12,11 @@
     font-family: "Comic Sans MS", "Comic Sans", cursive;
     font-size: 18px;
     line-height: 1.2;
+  }
+  #cellState {
+    min-height: 8rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 14px;
   }
   .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1rem; }
   .btn {
@@ -57,6 +63,12 @@
 GRID TOOL</textarea>
       <span class="hint">Text is drawn in black Comic Sans inside the colored grid.</span>
     </div>
+    <div class="field grid-state">
+      <label for="cellState">Cell visibility</label>
+      <textarea id="cellState" rows="6" spellcheck="false" placeholder="!!!!!!!!!!!!
+!!!!!!!!!!!!"></textarea>
+      <span class="hint">Use `!` for visible teal cells and `.` for hidden red-only cells. Click the grid to toggle cells.</span>
+    </div>
   </div>
 
   <div class="row">
@@ -94,12 +106,13 @@ const DEFAULTS = {
   gridWidth: '12',
   gridHeight: '8',
   cellSize: '36',
-  hiddenCells: []
+  cellState: ''
 };
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const messageInput = document.getElementById('message');
+const cellStateInput = document.getElementById('cellState');
 const gridWidthInput = document.getElementById('gridWidth');
 const gridHeightInput = document.getElementById('gridHeight');
 const cellSizeInput = document.getElementById('cellSize');
@@ -125,6 +138,38 @@ function parseHiddenCells(items) {
   );
 }
 
+function parseCellState(text, width, height) {
+  const rows = (text || '').replace(/\r\n?/g, '\n').split('\n');
+  const cells = new Set();
+
+  for (let row = 0; row < Math.min(rows.length, height); row++) {
+    for (let col = 0; col < Math.min(rows[row].length, width); col++) {
+      if (rows[row][col] === '.') cells.add(keyForCell(row, col));
+    }
+  }
+
+  return cells;
+}
+
+function serializeCellState(width, height) {
+  const rows = [];
+  for (let row = 0; row < height; row++) {
+    let line = '';
+    for (let col = 0; col < width; col++) {
+      line += hiddenCells.has(keyForCell(row, col)) ? '.' : '!';
+    }
+    rows.push(line);
+  }
+  return rows.join('\n');
+}
+
+function syncCellStateInput(width, height) {
+  const serialized = serializeCellState(width, height);
+  if (cellStateInput.value !== serialized) {
+    cellStateInput.value = serialized;
+  }
+}
+
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -134,7 +179,8 @@ function loadState() {
     gridWidthInput.value = typeof state.gridWidth === 'string' ? state.gridWidth : DEFAULTS.gridWidth;
     gridHeightInput.value = typeof state.gridHeight === 'string' ? state.gridHeight : DEFAULTS.gridHeight;
     cellSizeInput.value = typeof state.cellSize === 'string' ? state.cellSize : DEFAULTS.cellSize;
-    hiddenCells = parseHiddenCells(state.hiddenCells);
+    cellStateInput.value = typeof state.cellState === 'string' ? state.cellState : DEFAULTS.cellState;
+    hiddenCells = new Set();
   } catch (err) {
     hiddenCells = new Set();
   }
@@ -147,7 +193,7 @@ function storeState() {
       gridWidth: gridWidthInput.value,
       gridHeight: gridHeightInput.value,
       cellSize: cellSizeInput.value,
-      hiddenCells: [...hiddenCells].sort()
+      cellState: cellStateInput.value
     }));
   } catch (err) {
     // Ignore storage failures.
@@ -220,7 +266,9 @@ function drawText(width, height, cellSize) {
 
 function generate() {
   const { width, height, cellSize } = getMetrics();
+  hiddenCells = parseCellState(cellStateInput.value, width, height);
   trimHiddenCells(width, height);
+  syncCellStateInput(width, height);
   canvas.width = PAD * 2 + width * cellSize;
   canvas.height = PAD * 2 + height * cellSize;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -244,6 +292,7 @@ document.getElementById('dlBtn').onclick = ()=>{
 };
 
 messageInput.oninput = generate;
+cellStateInput.oninput = generate;
 gridWidthInput.oninput = generate;
 gridHeightInput.oninput = generate;
 cellSizeInput.oninput = generate;
@@ -262,6 +311,7 @@ canvas.onclick = (event) => {
   const key = keyForCell(row, col);
   if (hiddenCells.has(key)) hiddenCells.delete(key);
   else hiddenCells.add(key);
+  syncCellStateInput(renderState.width, renderState.height);
   generate();
 };
 
