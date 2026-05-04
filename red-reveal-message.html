@@ -380,25 +380,15 @@ function parseOverridesText(text){
   );
 }
 
-function serializeOverrides(matrix){
-  let lastNonEmptyRow = -1;
-
-  for(let row = 0; row < matrix.length; row++){
-    if (matrix[row].some(cell => cell)) lastNonEmptyRow = row;
-  }
-
-  if (lastNonEmptyRow === -1) return '';
-
+function serializeOverrides(matrix, rowCount = matrix.length, colCount = 0){
   const rows = [];
-  for(let row = 0; row <= lastNonEmptyRow; row++){
-    const cells = (matrix[row] || []).slice();
-    let lastNonEmptyCol = -1;
-    for(let col = 0; col < cells.length; col++){
-      if (cells[col]) lastNonEmptyCol = col;
+  for(let row = 0; row < rowCount; row++){
+    const cells = [];
+    for(let col = 0; col < colCount; col++){
+      cells.push(((matrix[row] || [])[col]) || '');
     }
-    rows.push(cells.slice(0, lastNonEmptyCol + 1).join(','));
+    rows.push(cells.join(','));
   }
-
   return rows.join('\n');
 }
 
@@ -415,8 +405,19 @@ function setOverrideSegments(row, col, segments){
   while (matrix.length <= row) matrix.push([]);
   while (matrix[row].length <= col) matrix[row].push('');
   matrix[row][col] = normalizeOverrideCell(segments.join(''));
-  overridesInput.value = serializeOverrides(matrix);
+  const rowCount = Math.max(matrix.length, lastRenderState.rowCount || 0);
+  const colCount = Math.max((lastRenderState.colCount || 0), col + 1);
+  overridesInput.value = serializeOverrides(matrix, rowCount, colCount);
   storeOverrides();
+}
+
+function syncOverridesTextbox(rowCount, colCount){
+  const matrix = getOverrideMatrix();
+  const serialized = serializeOverrides(matrix, rowCount, colCount);
+  if (overridesInput.value !== serialized) {
+    overridesInput.value = serialized;
+    storeOverrides();
+  }
 }
 
 function isOverrideMode(){
@@ -452,6 +453,7 @@ function generate(){
     ...lines.map(line => line.length),
     ...overrideMatrix.map(row => row.length)
   );
+  syncOverridesTextbox(rowCount, maxCols);
 
   canvas.width  = PAD * 2 + maxCols * metrics.width + Math.max(0, maxCols - 1) * metrics.hSpacing;
   canvas.height = PAD * 2 + rowCount * metrics.height + Math.max(0, rowCount - 1) * metrics.vSpacing;
