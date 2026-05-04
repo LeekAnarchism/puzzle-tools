@@ -96,6 +96,7 @@ ASCII 16-seg: ?!@#$%
 <script>
 const STORAGE_KEY_MESSAGE = 'red-reveal-message.secret';
 const STORAGE_KEY_OVERRIDES = 'red-reveal-message.overrides';
+const STORAGE_KEY_SETTINGS = 'red-reveal-message.settings';
 const SEGMENTS = ['A','B','C','D','E','F','G','H','K','M','N','P','R','S','T','U'];
 const FULL_MASK = SEGMENTS.slice();
 const BLANK_CHAR = ' ';
@@ -333,6 +334,14 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const secretInput = document.getElementById('secret');
 const overridesInput = document.getElementById('overrides');
+const decoyInput = document.getElementById('decoy');
+const charHeightInput = document.getElementById('charHeight');
+const charWidthInput = document.getElementById('charWidth');
+const hSpacingInput = document.getElementById('hSpacing');
+const vSpacingInput = document.getElementById('vSpacing');
+const lineThicknessInput = document.getElementById('lineThickness');
+const capsOnlyInput = document.getElementById('capsOnly');
+const overrideModeInput = document.getElementById('overrideMode');
 let lastRenderState = { cells: [] };
 
 function loadStoredMessage(){
@@ -353,9 +362,44 @@ function loadStoredOverrides(){
   }
 }
 
+function loadStoredSettings(){
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY_SETTINGS);
+    if (!stored) return;
+    const settings = JSON.parse(stored);
+    if (typeof settings.decoy === 'string') decoyInput.value = settings.decoy;
+    if (typeof settings.charHeight === 'string') charHeightInput.value = settings.charHeight;
+    if (typeof settings.charWidth === 'string') charWidthInput.value = settings.charWidth;
+    if (typeof settings.hSpacing === 'string') hSpacingInput.value = settings.hSpacing;
+    if (typeof settings.vSpacing === 'string') vSpacingInput.value = settings.vSpacing;
+    if (typeof settings.lineThickness === 'string') lineThicknessInput.value = settings.lineThickness;
+    if (typeof settings.capsOnly === 'boolean') capsOnlyInput.checked = settings.capsOnly;
+    if (typeof settings.overrideMode === 'boolean') overrideModeInput.checked = settings.overrideMode;
+  } catch (err) {
+    // Ignore storage failures so the tool still works in restricted contexts.
+  }
+}
+
 function storeMessage(){
   try {
     localStorage.setItem(STORAGE_KEY_MESSAGE, secretInput.value);
+  } catch (err) {
+    // Ignore storage failures so the tool still works in restricted contexts.
+  }
+}
+
+function storeSettings(){
+  try {
+    localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify({
+      decoy: decoyInput.value,
+      charHeight: charHeightInput.value,
+      charWidth: charWidthInput.value,
+      hSpacing: hSpacingInput.value,
+      vSpacing: vSpacingInput.value,
+      lineThickness: lineThicknessInput.value,
+      capsOnly: capsOnlyInput.checked,
+      overrideMode: overrideModeInput.checked
+    }));
   } catch (err) {
     // Ignore storage failures so the tool still works in restricted contexts.
   }
@@ -422,7 +466,7 @@ function syncOverridesTextbox(rowCount, colCount){
 }
 
 function isOverrideMode(){
-  return document.getElementById('overrideMode').checked;
+  return overrideModeInput.checked;
 }
 
 function pointInPolygon(x, y, points){
@@ -444,7 +488,7 @@ function generate(){
   const raw = isCapsOnlyMode()
     ? rawInput.toUpperCase().replace(/\./g, BLANK_CHAR).replace(/[^A-Z \n]/g,'')
     : rawInput.replace(/\./g, BLANK_CHAR).replace(/[^\x20-\x7E\n]/g,'');
-  const mode = document.getElementById('decoy').value;
+  const mode = decoyInput.value;
   const metrics = getMetrics();
   const lines = (raw || 'HELLO').split('\n');
   const overrideMatrix = getOverrideMatrix();
@@ -509,14 +553,36 @@ overridesInput.oninput = ()=>{
   storeOverrides();
   generate();
 };
-document.getElementById('decoy').onchange = generate;
-document.getElementById('charHeight').oninput = generate;
-document.getElementById('charWidth').oninput = generate;
-document.getElementById('hSpacing').oninput = generate;
-document.getElementById('vSpacing').oninput = generate;
-document.getElementById('lineThickness').oninput = generate;
-document.getElementById('capsOnly').onchange = generate;
-document.getElementById('overrideMode').onchange = ()=>{
+decoyInput.onchange = ()=>{
+  storeSettings();
+  generate();
+};
+charHeightInput.oninput = ()=>{
+  storeSettings();
+  generate();
+};
+charWidthInput.oninput = ()=>{
+  storeSettings();
+  generate();
+};
+hSpacingInput.oninput = ()=>{
+  storeSettings();
+  generate();
+};
+vSpacingInput.oninput = ()=>{
+  storeSettings();
+  generate();
+};
+lineThicknessInput.oninput = ()=>{
+  storeSettings();
+  generate();
+};
+capsOnlyInput.onchange = ()=>{
+  storeSettings();
+  generate();
+};
+overrideModeInput.onchange = ()=>{
+  storeSettings();
   canvas.style.cursor = isOverrideMode() ? 'crosshair' : 'default';
 };
 canvas.onclick = (event)=>{
@@ -548,6 +614,7 @@ canvas.onclick = (event)=>{
 };
 loadStoredMessage();
 loadStoredOverrides();
+loadStoredSettings();
 canvas.style.cursor = isOverrideMode() ? 'crosshair' : 'default';
 generate();
 </script>
